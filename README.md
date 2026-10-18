@@ -1,8 +1,25 @@
 # cmdline.nvim
 
-A small Neovim 0.12+ command-line UI built on the native UI2 and `vim.ui_attach()`. It renders `:`, `input()`, and other command lines in a floating window, shows the native completion popup in a companion window, and routes messages through `notify.nvim`.
+A small Neovim 0.12+ command-line UI built on native UI2 and `vim.ui_attach()`.
+
+`cmdline.nvim` renders command-line input in a floating window, displays the popupmenu when no external completion backend owns it, and routes ordinary messages through `vim.notify()`.
 
 [简体中文](README.zh-CN.md)
+
+## Features
+
+- Floating rendering for `:`, `/`, `?`, `input()`, expression input, debug input, and command-specific prompts.
+- Separate layouts for command lines, searches, file prompts, rename prompts, and user-defined contexts.
+- Native UI2 popupmenu support with Blink and nvim-cmp coexistence.
+- Message routing through `notify.nvim`, including error and warning levels.
+- Scrollable `:messages` and `g<` history window.
+- Configurable borders, titles, icons, positions, and highlight groups.
+- Extension points for classifying new command lines and prompts without changing plugin code.
+
+## Requirements
+
+- Neovim 0.12 or newer.
+- A UI that supports floating windows. UI2 is experimental, so event details may change with Neovim.
 
 ## Installation
 
@@ -17,77 +34,247 @@ The canonical repository is hosted on Codeberg: <https://codeberg.org/aevre/cmdl
 
 ## Configuration
 
+The configuration is grouped into three independent sections: `cmdline`, `messages`, and `popupmenu`.
+
 ```lua
 require("cmdline").setup({
-  enabled = true,
-  views = {
-    cmdline = "middle",
-    search = "bottom",
-    input = "middle",
-    lua = "lua",
-    filter = "top",
-    expression = "middle",
-    substitute = "top",
+  cmdline = {
+    enabled = true,
+    view = "cmdline_popup",
+    extensions = {},
+    opts = {
+      width = { value = "60%", min = 40, max = 100 },
+      border = "rounded",
+      highlights = {
+        normal = "FzfLuaNormal",
+        border = "FzfLuaBorder",
+        title = "FzfLuaTitle",
+        icon = "Special",
+        pum = "Pmenu",
+      },
+      icon_hl_group = "CmdlineIcon",
+      presets = {
+        cmdline_popup = { position = "top", title = "Command", icon = ">" },
+        mini = { position = "mini", border = "none" },
+        lua = { position = "top", title = "Lua", icon = "" },
+        filter = { position = "top", title = "Filter", icon = "!" },
+        help = { position = "top", title = "Help", icon = "?" },
+        input = { position = "top", title = "Input", icon = "?" },
+        rename = { position = "top", title = "Rename", icon = "R" },
+      },
+    },
+    format = {
+      cmdline = { pattern = "^:", icon = ">", view = "cmdline_popup" },
+      search_down = { kind = "search", pattern = "^/", icon = "/", view = "mini" },
+      search_up = { kind = "search", pattern = "^%?", icon = "?", view = "mini" },
+      filter = { pattern = "^:%s*!", icon = "!", view = "filter" },
+      help = { pattern = "^:%s*he?l?p?%s+", icon = "?", view = "help" },
+      lua = {
+        pattern = { "^:%s*lua%s+", "^:%s*lua%s*=%s*", "^:%s*=%s*" },
+        icon = "",
+        view = "lua",
+      },
+      input = { view = "input", icon = "?" },
+      rename = { view = "rename", icon = "R" },
+    },
   },
-  presets = {
-    top = { position = "top", title = "Filter", icon = "!" },
-    middle = { position = "middle", title = "Command", icon = ">" },
-    lua = { position = "middle", title = "Lua", icon = "" },
-    bottom = { position = "bottom", title = "Search", icon = "/" },
-    mini = { position = "mini", border = "none" },
+  messages = {
+    enabled = true,
+    view = "notify",
+    view_error = "notify",
+    view_warn = "notify",
+    view_history = "messages",
+    view_search = "notify",
   },
-  prefixes = {
-    search = { icon = "" },
+  popupmenu = {
+    enabled = true,
+    backend = "nui",
+    kind_icons = {},
   },
-  width = { value = "60%", min = 40, max = 100 },
-  border = "rounded",
-  popupmenu = true,
-  notify_search = true,
 })
 ```
 
-`setup()` deep-merges the supplied options with the defaults. The options are:
+### `cmdline`
 
-- `enabled`: set to `false` to leave the native command line and popup menu untouched.
-- `width`: the default width of command-line floats. `value` accepts a number, a percentage string such as `"60%"`, or a numeric string. `min` and `max` clamp the resulting width in screen columns. A preset's `width` overrides this global value.
-- `border`: the default floating-window border. It accepts any border value supported by `nvim_open_win()`, including `"rounded"`, `"single"`, `"none"`, or a custom border table. A preset's `border` overrides it.
-- `popupmenu`: set to `false` to disable the fallback native completion window drawn by this plugin. Blink and nvim-cmp still own their own completion windows and are not duplicated.
-- `notify_search`: set to `false` to stop routing search counts, failed searches, and search warnings to `vim.notify`.
-- `views`: maps a detected command-line context to a preset name. Built-in contexts are `cmdline`, `search`, `input`, `lua`, `filter`, `expression`, `substitute`, and `debug`. A missing mapping falls back to `middle`; a missing preset also falls back to the default `middle` preset. Context detection covers `:lua`, `:lua =`, `:=`, `/`, `?`, `input()`, substitute/filter commands, and debug commands.
-- `prefixes`: sets an icon per context, for example `{ search = { icon = "" } }`. The icon is followed by one space. A preset's `icon` takes precedence over the context prefix. Set the icon to an empty string to remove it.
-- `presets`: defines reusable layouts. Each preset supports the fields below:
-  - `position`: `"top"`, `"middle"`, `"bottom"`, `"mini"`, or `"custom"`. `mini` uses the full-width native command-line row. `custom` uses `x` and `y`.
-  - `x`, `y`: offsets used by `custom`. They may be numbers, percentages such as `"10%"`, or numeric strings.
-  - `width`: a per-preset width table with the same `value`, `min`, and `max` fields as the global option.
-  - `border`: a per-preset border override.
-  - `title`: text centered in the top border.
-  - `icon`: icon displayed before the input text, followed by one space.
+- `enabled`: enable command-line rendering.
+- `view`: fallback preset used when no format selects another view.
+- `extensions`: extensions that classify command lines before the built-in extensions run.
+- `opts.width`: a number, percentage string, or numeric string. `min` and `max` clamp the resulting width.
+- `opts.border`: any border accepted by `nvim_open_win()`.
+- `opts.highlights`: links for the normal area, border, title, icon, and popupmenu.
+- `opts.icon_hl_group`: default highlight group for icons.
+- `opts.presets`: reusable layout definitions.
+- `format`: maps a context or command pattern to a preset and presentation values.
 
-The legacy top-level `position = { x = ..., y = ... }` option is still accepted and applies to the `middle` preset when that preset is not explicitly configured. New configurations should use a named custom preset instead:
+### `messages`
+
+- `enabled`: enable UI2 message handling.
+- `view`, `view_error`, and `view_warn`: destination names kept for configuration compatibility; ordinary messages are currently sent through `vim.notify()`.
+- `view_history`: name of the history view. The built-in `messages` view is a scrollable floating window.
+- `view_search`: set to `false` to disable search-result notification routing.
+
+Errors and warnings retain their log levels. Search messages use the `Search` notification title. Notification history remains owned by `notify.nvim`.
+
+### `popupmenu`
+
+- `enabled`: enable popupmenu handling.
+- `backend`: use `"nui"` for the built-in fallback window or `"cmp"` when an external completion backend should own the menu.
+- `kind_icons`: reserved for completion kind icons; set it to `false` to disable them.
+
+When Blink or nvim-cmp is loaded in command-line mode, `cmdline.nvim` does not draw a duplicate popupmenu. The completion plugin owns its menu while `cmdline.nvim` supplies the floating command-line position.
+
+## Extensions
+
+Extensions classify the current UI2 command-line event. The returned name is used to look up `cmdline.format[name]` and, through its `view` field, `cmdline.opts.presets[name]`.
+
+The resolution order is:
+
+1. User extensions.
+2. Built-in extensions.
+3. The generic `cmdline` context.
+
+### Function extensions
+
+A function receives a state table:
 
 ```lua
-presets = {
-  command = {
-    position = "custom",
-    x = "50%",
-    y = "30%",
-    width = { value = "70%", min = 50, max = 120 },
-    title = "Command",
-  },
-},
-views = { cmdline = "command" }
+{
+  firstc = ":",       -- command-line prefix, such as :, /, or ?
+  prompt = "",        -- input() prompt, when present
+  chunks = {},         -- original UI2 chunks
+  lines = {},          -- plain text lines made from chunks
+  pos = 0,             -- cursor position from UI2
+  indent = 0,
+  level = 0,
+}
 ```
 
-Preset titles are centered in the float's top border. `views` controls which preset is selected; `prefixes` controls context icons; a preset's `icon` and other fields take precedence over global defaults.
+Return a context name or `{ name = "context" }`:
 
-Command lines, including search command lines, are rendered by the plugin. Ordinary command output and Lua output are sent to `vim.notify`; errors and warnings retain their log levels, and search messages use a dedicated `Search` title. `:messages` and `g<` open a scrollable `Messages` floating window containing the complete history.
+```lua
+cmdline = {
+  extensions = {
+    function(state)
+      if state.firstc == ":" and state.lines[1]:match("^Git%s") then
+        return "git"
+      end
+    end,
+  },
+}
+```
 
-## Requirements and limits
+Add the matching format and preset:
 
-- Neovim 0.12 or newer.
-- UI2 is experimental, so event details may change with Neovim.
-- The plugin owns UI2 `msg_show` and message-history events so output can be routed to `notify.nvim`.
-- Notification history and LSP progress remain owned by `notify.nvim`; the plugin does not replace either surface.
-- Completion providers remain responsible for their item data. If `blink.cmp` or `nvim-cmp` is loaded, its command-line menu owns the completion window and this plugin does not draw a second native popup; `cmdline.nvim` still supplies the floating command-line position used by the provider.
+```lua
+cmdline = {
+  opts = {
+    presets = {
+      git = { position = "top", title = "Git", icon = "G" },
+    },
+  },
+  format = {
+    git = { view = "git", icon = "G" },
+  },
+}
+```
 
-Run `make check` for formatting, linting, and the headless smoke test.
+### Declarative prompt extensions
+
+Prompt extensions are useful for file, buffer, rename, and other `input()` questions. `prompt` accepts one Lua pattern or a list of Lua patterns. Matching is case-insensitive.
+
+```lua
+cmdline = {
+  extensions = {
+    {
+      name = "file",
+      prompt = { "already%s+open", "filename" },
+    },
+  },
+  opts = {
+    presets = {
+      file = { position = "top", title = "File", icon = "F" },
+    },
+  },
+  format = {
+    file = { view = "file", icon = "F" },
+  },
+}
+```
+
+A prompt that does not match a custom extension uses the built-in `input` context. The built-in `rename` context is itself a prompt extension matching `rename` and `new name`.
+
+### Built-in contexts
+
+- `cmdline`: fallback for ordinary `:` commands.
+- `search`: `/` and `?`; the default formats use the bottom `mini` layout.
+- `input`: an unmatched `input()` prompt.
+- `rename`: prompts containing `rename` or `new name`.
+- `expression`: `=` expression input.
+- `debug`: `>` debug input.
+- `lua`: `:lua`, `:lua =`, and `:=`.
+- `filter`: `:!` and `:filter` commands.
+- `help`: `:h`, `:he`, `:hel`, and `:help` followed by a space.
+- `substitute`: `:s/` and `:substitute` commands.
+
+The Lua and help views conceal their command prefixes and compensate the cursor position. A format can be disabled by setting it to `false`.
+
+## Layout and highlighting
+
+`position` accepts `"top"`, `"middle"`, `"bottom"`, `"mini"`, or `"custom"`.
+
+- `top`, `middle`, and `bottom` use a centered floating window with the corresponding vertical placement.
+- `mini` uses a full-width, one-line window at the bottom of the editor. It temporarily sets `cmdheight` to `1` while active and restores it to `0` when hidden.
+- `custom` uses the preset's `x` and `y` values.
+
+Most built-in contexts use `top`; searches use `mini`. Preset titles are centered in the top border and padded with one space on each side. A preset icon overrides the format icon.
+
+The plugin defines these internal highlight links:
+
+- `CmdlineNormal`
+- `CmdlineBorder`
+- `CmdlineTitle`
+- `CmdlineIcon`
+- `CmdlinePum`
+
+Configure the links with `cmdline.opts.highlights`. Icon priority is format `icon_hl_group`, then preset `icon_hl_group`, then `cmdline.opts.icon_hl_group`.
+
+## Messages and history
+
+Ordinary UI2 output, Lua output, shell output, errors, and warnings are routed through public `vim.notify()`, so the configured notification renderer and history remain in control.
+
+`:messages` and `g<` open a dedicated scrollable `Messages` floating window. Press `q` or `<Esc>` to close it and restore the previous window. The public API is:
+
+```lua
+require("cmdline").close_history()
+```
+
+Interactive confirmation prompts and return prompts remain native and are not routed through notifications.
+
+## UI2 ownership
+
+`cmdline.nvim` enables its required UI2 surfaces internally with `vim.ui_attach()`:
+
+```lua
+ext_cmdline = true
+ext_popupmenu = true
+ext_messages = true
+set_cmdheight = false
+```
+
+Do not also call `require("vim._core.ui2").enable({})`; attaching both implementations can duplicate or compete for command-line, popupmenu, and message events.
+
+If the plugin is disabled, Neovim's default UI2 implementation may be enabled separately:
+
+```lua
+require("vim._core.ui2").enable({ enable = true })
+```
+
+## Development
+
+Run the complete local check from the repository root:
+
+```sh
+make check
+```
+
+This runs Stylua formatting checks, Selene, and the headless smoke test.

@@ -1,8 +1,25 @@
 # cmdline.nvim
 
-基于 Neovim 0.12 原生 UI2 和 `vim.ui_attach()` 的轻量命令行界面。它将 `:`、`input()` 等命令行显示在浮动窗口中，使用独立窗口显示原生补全菜单，并将消息交给 `notify.nvim`。
+基于 Neovim 0.12+ 原生 UI2 和 `vim.ui_attach()` 的轻量命令行界面。
+
+`cmdline.nvim` 将命令行输入渲染到浮动窗口中；没有外部补全后端接管时，显示 popupmenu；普通消息则通过 `vim.notify()` 路由。
 
 [English](README.md)
+
+## 功能
+
+- 为 `:`、`/`、`?`、`input()`、表达式、debug 和命令专用提示提供浮动渲染。
+- 为命令行、搜索、文件提示、重命名提示和用户自定义 context 提供独立布局。
+- 支持原生 UI2 popupmenu，并与 Blink、nvim-cmp 共存。
+- 通过 `notify.nvim` 路由消息，同时保留错误和警告级别。
+- 提供可滚动的 `:messages` 和 `g<` 历史窗口。
+- 可配置边框、标题、图标、位置和高亮组。
+- 支持扩展命令行和 prompt 分类，无需修改插件代码。
+
+## 要求
+
+- Neovim 0.12 或更新版本。
+- 支持浮动窗口的 UI。UI2 仍是实验性功能，事件细节可能随 Neovim 版本变化。
 
 ## 安装
 
@@ -17,77 +34,247 @@ Canonical 仓库位于 Codeberg：<https://codeberg.org/aevre/cmdline.nvim>。
 
 ## 配置
 
+配置分为三个相互独立的部分：`cmdline`、`messages` 和 `popupmenu`。
+
 ```lua
 require("cmdline").setup({
-  enabled = true,
-  views = {
-    cmdline = "middle",
-    search = "bottom",
-    input = "middle",
-    lua = "lua",
-    filter = "top",
-    expression = "middle",
-    substitute = "top",
+  cmdline = {
+    enabled = true,
+    view = "cmdline_popup",
+    extensions = {},
+    opts = {
+      width = { value = "60%", min = 40, max = 100 },
+      border = "rounded",
+      highlights = {
+        normal = "FzfLuaNormal",
+        border = "FzfLuaBorder",
+        title = "FzfLuaTitle",
+        icon = "Special",
+        pum = "Pmenu",
+      },
+      icon_hl_group = "CmdlineIcon",
+      presets = {
+        cmdline_popup = { position = "top", title = "命令", icon = ">" },
+        mini = { position = "mini", border = "none" },
+        lua = { position = "top", title = "Lua", icon = "" },
+        filter = { position = "top", title = "过滤", icon = "!" },
+        help = { position = "top", title = "帮助", icon = "?" },
+        input = { position = "top", title = "输入", icon = "?" },
+        rename = { position = "top", title = "Rename", icon = "R" },
+      },
+    },
+    format = {
+      cmdline = { pattern = "^:", icon = ">", view = "cmdline_popup" },
+      search_down = { kind = "search", pattern = "^/", icon = "/", view = "mini" },
+      search_up = { kind = "search", pattern = "^%?", icon = "?", view = "mini" },
+      filter = { pattern = "^:%s*!", icon = "!", view = "filter" },
+      help = { pattern = "^:%s*he?l?p?%s+", icon = "?", view = "help" },
+      lua = {
+        pattern = { "^:%s*lua%s+", "^:%s*lua%s*=%s*", "^:%s*=%s*" },
+        icon = "",
+        view = "lua",
+      },
+      input = { view = "input", icon = "?" },
+      rename = { view = "rename", icon = "R" },
+    },
   },
-  presets = {
-    top = { position = "top", title = "过滤", icon = "!" },
-    middle = { position = "middle", title = "命令", icon = ">" },
-    lua = { position = "middle", title = "Lua", icon = "" },
-    bottom = { position = "bottom", title = "搜索", icon = "/" },
-    mini = { position = "mini", border = "none" },
+  messages = {
+    enabled = true,
+    view = "notify",
+    view_error = "notify",
+    view_warn = "notify",
+    view_history = "messages",
+    view_search = "notify",
   },
-  prefixes = {
-    search = { icon = "" },
+  popupmenu = {
+    enabled = true,
+    backend = "nui",
+    kind_icons = {},
   },
-  width = { value = "60%", min = 40, max = 100 },
-  border = "rounded",
-  popupmenu = true,
-  notify_search = true,
 })
 ```
 
-`setup()` 会将用户配置与默认值进行深度合并。各配置项如下：
+### `cmdline`
 
-- `enabled`：设为 `false` 时，不接管原生命令行和补全菜单。
-- `width`：命令行浮窗的默认宽度。`value` 可以是数字、百分比字符串（例如 `"60%"`）或数字字符串；`min` 和 `max` 会按屏幕列数限制最终宽度。预设中的 `width` 会覆盖全局值。
-- `border`：默认浮窗边框，支持 `nvim_open_win()` 支持的所有边框格式，例如 `"rounded"`、`"single"`、`"none"` 或自定义边框表。预设中的 `border` 优先级更高。
-- `popupmenu`：设为 `false` 时，禁用本插件绘制的备用原生补全窗口。Blink 和 nvim-cmp 仍然使用自己的补全窗口，不会受到重复绘制影响。
-- `notify_search`：设为 `false` 时，不再通过 `vim.notify` 显示搜索计数、搜索失败和搜索警告。
-- `views`：将识别出的命令行场景映射到预设名称。内置场景有 `cmdline`、`search`、`input`、`lua`、`filter`、`expression`、`substitute` 和 `debug`。没有映射时使用 `middle`；预设不存在时也回退到默认的 `middle` 预设。场景识别包括 `:lua`、`:lua =`、`:=`、`/`、`?`、`input()`、替换/过滤命令和调试命令。
-- `prefixes`：按场景设置图标，例如 `{ search = { icon = "" } }`。图标后会自动添加一个空格。预设中的 `icon` 优先于场景图标；设为空字符串即可移除图标。
-- `presets`：定义可复用的布局。每个预设支持以下字段：
-  - `position`：`"top"`、`"middle"`、`"bottom"`、`"mini"` 或 `"custom"`。`mini` 使用原生命令行所在的全宽行；`custom` 使用 `x` 和 `y` 定位。
-  - `x`、`y`：`custom` 布局使用的偏移量，可以是数字、百分比（例如 `"10%"`）或数字字符串。
-  - `width`：预设级宽度表，字段与全局 `width` 的 `value`、`min`、`max` 相同。
-  - `border`：预设级边框覆盖值。
-  - `title`：显示在浮窗上边框中央的标题。
-  - `icon`：显示在输入内容前的图标，图标后自动添加一个空格。
+- `enabled`：启用命令行渲染。
+- `view`：没有格式选择其他视图时使用的默认预设。
+- `extensions`：在内置扩展之前分类命令行的扩展。
+- `opts.width`：支持数字、百分比字符串或数字字符串；`min` 和 `max` 限制最终宽度。
+- `opts.border`：支持 `nvim_open_win()` 接受的所有边框格式。
+- `opts.highlights`：配置普通区域、边框、标题、图标和 popupmenu 的高亮链接。
+- `opts.icon_hl_group`：图标的默认高亮组。
+- `opts.presets`：可复用的布局定义。
+- `format`：将 context 或命令模式映射到预设和显示属性。
 
-旧版顶层 `position = { x = ..., y = ... }` 仍然兼容：当没有显式配置 `middle` 预设时，它会应用到 `middle`。新配置建议使用命名的 `custom` 预设：
+### `messages`
+
+- `enabled`：启用 UI2 消息处理。
+- `view`、`view_error` 和 `view_warn`：保留用于配置消息目标名称；当前普通消息通过 `vim.notify()` 发送。
+- `view_history`：历史视图名称。内置的 `messages` 视图是可滚动浮动窗口。
+- `view_search`：设为 `false` 可关闭搜索结果通知路由。
+
+错误和警告保留对应日志级别。搜索消息使用 `Search` 通知标题。通知历史仍由 `notify.nvim` 负责。
+
+### `popupmenu`
+
+- `enabled`：启用 popupmenu 处理。
+- `backend`：使用 `"nui"` 启用内置备用窗口，使用 `"cmp"` 时交给外部补全后端。
+- `kind_icons`：预留给补全项目类型图标；设为 `false` 可禁用。
+
+当 Blink 或 nvim-cmp 在命令行模式中加载时，`cmdline.nvim` 不会绘制重复的 popupmenu。补全插件负责菜单，`cmdline.nvim` 提供浮动命令行位置。
+
+## 扩展机制
+
+扩展负责识别当前 UI2 命令行。扩展返回的名称会用于查找 `cmdline.format[name]`，并通过其中的 `view` 字段查找 `cmdline.opts.presets[name]`。
+
+解析顺序如下：
+
+1. 用户扩展。
+2. 内置扩展。
+3. 通用的 `cmdline` context。
+
+### 函数扩展
+
+函数接收一个状态表：
 
 ```lua
-presets = {
-  command = {
-    position = "custom",
-    x = "50%",
-    y = "30%",
-    width = { value = "70%", min = 50, max = 120 },
-    title = "命令",
-  },
-},
-views = { cmdline = "command" }
+{
+  firstc = ":",       -- 命令行前缀，例如 :、/ 或 ?
+  prompt = "",        -- input() prompt，没有时为空
+  chunks = {},         -- 原始 UI2 chunks
+  lines = {},          -- 从 chunks 转换得到的纯文本行
+  pos = 0,             -- UI2 提供的光标位置
+  indent = 0,
+  level = 0,
+}
 ```
 
-预设标题会居中显示在浮窗上边框。`views` 决定使用哪个预设，`prefixes` 决定场景图标；预设中的 `icon` 和其他字段优先于全局默认值。
+返回 context 名称或 `{ name = "context" }`：
 
-包括搜索在内的命令行都由插件渲染。普通命令输出和 Lua 输出通过 `vim.notify` 显示；错误和警告保留对应级别，搜索消息使用独立的 `Search` 标题。`:messages` 和 `g<` 会打开可滚动的 `Messages` 浮动窗口，显示完整消息历史。
+```lua
+cmdline = {
+  extensions = {
+    function(state)
+      if state.firstc == ":" and state.lines[1]:match("^Git%s") then
+        return "git"
+      end
+    end,
+  },
+}
+```
 
-## 要求和限制
+再添加对应的 format 和 preset：
 
-- Neovim 0.12 或更新版本。
-- UI2 仍是实验性功能，事件细节可能随 Neovim 版本变化。
-- 插件接管 UI2 的 `msg_show` 和消息历史事件，将输出路由到 `notify.nvim`。
-- 通知历史和 LSP progress 仍由 `notify.nvim` 负责，插件不会替换这两个界面。
-- 补全提供者仍负责补全项目内容。如果已加载 `blink.cmp` 或 `nvim-cmp`，命令行菜单由补全插件负责，避免本插件再次绘制原生 popup；`cmdline.nvim` 仍提供补全插件所需的浮动命令行位置。
+```lua
+cmdline = {
+  opts = {
+    presets = {
+      git = { position = "top", title = "Git", icon = "G" },
+    },
+  },
+  format = {
+    git = { view = "git", icon = "G" },
+  },
+}
+```
 
-运行 `make check` 可执行格式检查、静态检查和 headless smoke test。
+### 声明式 prompt 扩展
+
+prompt 扩展适合文件、buffer、重命名和其他 `input()` 问题。`prompt` 可以是一个 Lua 模式，也可以是 Lua 模式列表。匹配不区分大小写。
+
+```lua
+cmdline = {
+  extensions = {
+    {
+      name = "file",
+      prompt = { "already%s+open", "filename" },
+    },
+  },
+  opts = {
+    presets = {
+      file = { position = "top", title = "File", icon = "F" },
+    },
+  },
+  format = {
+    file = { view = "file", icon = "F" },
+  },
+}
+```
+
+没有匹配自定义扩展的 prompt 会使用内置 `input` context。内置的 `rename` context 本身也是一个 prompt 扩展，匹配 `rename` 和 `new name`。
+
+### 内置 context
+
+- `cmdline`：普通 `:` 命令的回退 context。
+- `search`：`/` 和 `?`；默认格式使用底部的 `mini` 布局。
+- `input`：没有被其他扩展匹配的 `input()` prompt。
+- `rename`：包含 `rename` 或 `new name` 的 prompt。
+- `expression`：以 `=` 开头的表达式输入。
+- `debug`：以 `>` 开头的 debug 输入。
+- `lua`：`:lua`、`:lua =` 和 `:=`。
+- `filter`：`:!` 和 `:filter` 命令。
+- `help`：后面带空格的 `:h`、`:he`、`:hel` 和 `:help`。
+- `substitute`：`:s/` 和 `:substitute` 命令。
+
+Lua 和 help 视图会隐藏命令前缀，并补偿光标位置。将某个 format 设为 `false` 可以禁用它。
+
+## 布局和高亮
+
+`position` 支持 `"top"`、`"middle"`、`"bottom"`、`"mini"` 和 `"custom"`。
+
+- `top`、`middle` 和 `bottom` 使用居中的浮动窗口，并放置在对应的垂直位置。
+- `mini` 使用编辑器底部全宽的单行窗口。激活时临时将 `cmdheight` 设为 `1`，隐藏后恢复为 `0`。
+- `custom` 使用预设中的 `x` 和 `y`。
+
+大多数内置 context 使用 `top`，搜索使用 `mini`。预设标题居中显示在浮窗上边框，并在两侧各保留一个空格。预设图标会覆盖格式图标。
+
+插件定义以下内部高亮链接：
+
+- `CmdlineNormal`
+- `CmdlineBorder`
+- `CmdlineTitle`
+- `CmdlineIcon`
+- `CmdlinePum`
+
+使用 `cmdline.opts.highlights` 配置这些链接。图标高亮优先级为：格式的 `icon_hl_group`、预设的 `icon_hl_group`、`cmdline.opts.icon_hl_group`。
+
+## 消息和历史
+
+普通 UI2 输出、Lua 输出、shell 输出、错误和警告都会通过公开的 `vim.notify()` 路由，因此通知渲染器和历史仍由现有配置负责。
+
+`:messages` 和 `g<` 会打开独立的可滚动 `Messages` 浮动窗口。按 `q` 或 `<Esc>` 关闭，并恢复之前的窗口。公开 API 是：
+
+```lua
+require("cmdline").close_history()
+```
+
+交互式确认 prompt 和 return prompt 保持原生行为，不会被路由到通知。
+
+## UI2 所有权
+
+`cmdline.nvim` 会通过 `vim.ui_attach()` 在内部启用所需 UI2 surface：
+
+```lua
+ext_cmdline = true
+ext_popupmenu = true
+ext_messages = true
+set_cmdheight = false
+```
+
+不要再调用 `require("vim._core.ui2").enable({})`；同时挂载两套实现会导致命令行、popupmenu 和消息事件重复处理或窗口竞争。
+
+如果禁用本插件，可以单独启用 Neovim 默认 UI2 实现：
+
+```lua
+require("vim._core.ui2").enable({ enable = true })
+```
+
+## 开发
+
+在仓库根目录运行完整检查：
+
+```sh
+make check
+```
+
+该命令会执行 Stylua 格式检查、Selene 静态检查和 headless smoke test。

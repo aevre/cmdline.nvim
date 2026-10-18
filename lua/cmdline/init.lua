@@ -6,64 +6,46 @@
 ---@field border? string|string[]
 ---@field title? string
 ---@field icon? string
+---@field icon_hl_group? string
+
+---@class cmdline.Highlights
+---@field normal? string
+---@field border? string
+---@field title? string
+---@field icon? string
+---@field pum? string
+
+---@class cmdline.Format
+---@field pattern? string|string[]
+---@field kind? string
+---@field view? string
+---@field icon? string
+---@field title? string
+---@field icon_hl_group? string
 
 ---@class cmdline.Config
----@field enabled? boolean
----@field position? { x?: number|string, y?: number|string } Legacy middle-view position
----@field presets? table<string, cmdline.View>
----@field views? table<string, string>
----@field prefixes? table<string, { icon?: string }>
----@field border? string|string[]
----@field popupmenu? boolean
----@field notify_search? boolean
+---@field cmdline? { enabled?: boolean, view?: string, extensions?: function[]|table[], opts?: table, format?: table<string, cmdline.Format|false> }
+---@field messages? { enabled?: boolean, view?: string, view_error?: string, view_warn?: string, view_history?: string, view_search?: string|false }
+---@field popupmenu? { enabled?: boolean, backend?: "nui"|"cmp", kind_icons?: table|string|false }
 
 ---@class cmdline.Module
 ---@field setup fun(opts?: cmdline.Config): cmdline.Module
 
 local M = {}
+local config_module = require("cmdline.config")
+local highlights = require("cmdline.highlights")
+local messages = require("cmdline.messages")
+local extensions = require("cmdline.extensions")
 
-local defaults = {
-	enabled = true,
-	presets = {
-		top = { position = "top", title = "Filter" },
-		middle = { position = "middle", title = "Command" },
-		lua = { position = "middle", title = "Lua", icon = "" },
-		bottom = { position = "bottom", title = "Search" },
-		mini = { position = "mini", border = "none" },
-	},
-	views = {
-		cmdline = "middle",
-		search = "bottom",
-		input = "middle",
-		lua = "lua",
-		filter = "top",
-		substitute = "top",
-	},
-	prefixes = {
-		cmdline = { icon = ">" },
-		search = { icon = "/" },
-		input = { icon = "?" },
-		lua = { icon = "" },
-		filter = { icon = "!" },
-		substitute = { icon = "s" },
-	},
-	width = { value = "60%", min = 40, max = 100 },
-	border = "rounded",
-	popupmenu = true,
-	notify_search = true,
-}
-
-local config = vim.deepcopy(defaults)
+local config = vim.deepcopy(config_module.defaults)
 local ns = vim.api.nvim_create_namespace("cmdline.nvim")
 local cmd_buf
 local cmd_win
 local pum_buf
 local pum_win
-local history_buf
-local history_win
-local history_prev_win
 local attached = false
 local cmp_patched = false
+local mini_cmdheight = false
 local current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
 local cmdline_generation = 0
 
@@ -100,10 +82,11 @@ end
 
 local function dimensions()
 	local view = active_view()
-	local width = view.width or config.width
+	local opts = config.cmdline.opts
+	local width = view.width or opts.width
 	local cols = vim.o.columns
 	if view.position == "mini" then
-		return cols, 1
+		return cols, vim.o.lines
 	end
 	local value_width = dimension(width.value, cols)
 	return math.max(width.min or 1, math.min(width.max or cols, value_width)), vim.o.lines
@@ -111,15 +94,16 @@ end
 
 local function position(width, height, rows)
 	local view = active_view()
+	local editor_rows = math.max(1, rows - vim.o.cmdheight)
 	if view.position == "mini" then
 		return 0, math.max(0, rows - height)
 	end
 	local available_x = math.max(0, vim.o.columns - width)
-	local available_y = math.max(0, rows - height)
+	local available_y = math.max(0, editor_rows - height)
 	local x = view.position == "custom" and dimension(view.x, available_x) or math.floor(available_x / 2)
 	local y = view.position == "custom" and dimension(view.y, available_y)
-		or view.position == "top" and 1
-		or view.position == "bottom" and available_y
+		or view.position == "top" and 4
+		or view.position == "bottom" and math.max(0, available_y - 3)
 		or math.floor(available_y / 2)
 	return math.max(0, math.min(available_x, x)), math.max(0, math.min(available_y, y))
 end
@@ -138,30 +122,45 @@ local function chunks_text(chunks)
 end
 
 view_name = function()
-	local firstc = current.firstc
-	if firstc == "/" or firstc == "?" then
-		return "search"
-	elseif current.prompt ~= "" then
-		return "input"
-	elseif firstc == "=" then
-		return "expression"
-	elseif firstc == ">" then
-		return "debug"
+	return extensions.resolve(config, current, chunks_text(current.chunks))
+end
+
+local function format_for(context)
+	local format = config.cmdline.format[context]
+	if context == "search" then
+		format = config.cmdline.format[current.firstc == "/" and "search_down" or "search_up"]
 	end
-	local command = table.concat(chunks_text(current.chunks), " "):gsub("^%s*:", "")
-	if command:match("^lua%f[%W]") or command:match("^lua%s*=") then
-		return "lua"
-	elseif command:match("^s/") or command:match("^substitute%f[%W]") then
-		return "substitute"
-	elseif command:match("^filter%f[%W]") or command:match("^!") then
-		return "filter"
+	if format == false then
+		return {}
 	end
-	return "cmdline"
+	if format and context ~= "cmdline" then
+		return format
+	end
+
+	local text = current.firstc .. table.concat(chunks_text(current.chunks), "\n")
+	local names = vim.tbl_keys(config.cmdline.format)
+	table.sort(names)
+	for _, name in ipairs(names) do
+		if name ~= "cmdline" and name ~= context then
+			local candidate = config.cmdline.format[name]
+			if candidate and candidate.pattern then
+				local patterns = type(candidate.pattern) == "table" and candidate.pattern or { candidate.pattern }
+				for _, pattern in ipairs(patterns) do
+					if text:match(pattern) then
+						return candidate
+					end
+				end
+			end
+		end
+	end
+	return format or {}
 end
 
 active_view = function()
-	local name = config.views[view_name()] or "middle"
-	return config.presets[name] or config.presets.middle
+	local context = view_name()
+	local format = format_for(context)
+	local name = format.view or config.cmdline.view
+	return config.cmdline.opts.presets[name] or config.cmdline.opts.presets.cmdline_popup
 end
 
 local function set_lines(buf, lines)
@@ -178,25 +177,40 @@ local function redraw_cmdline()
 	local height = math.min(8, math.max(1, #chunks_text(current.chunks)))
 	local col, win_row = position(width, height, rows)
 	local view = active_view()
-	local ok = pcall(vim.api.nvim_win_set_config, cmd_win, {
+	local context = view_name()
+	local format = format_for(context)
+	local win_config = {
 		relative = "editor",
 		row = win_row,
 		col = col,
 		width = width,
 		height = height,
-		border = view.border or config.border,
-		title = view.title,
-		title_pos = "center",
-	})
+		border = view.border or config.cmdline.opts.border,
+	}
+	local title = format.title or view.title
+	if title then
+		win_config.title = " " .. title .. " "
+		win_config.title_pos = "center"
+	end
+	local ok = pcall(vim.api.nvim_win_set_config, cmd_win, win_config)
 	if not ok then
 		return
 	end
 	local lines = chunks_text(current.chunks)
-	local context = view_name()
-	local prefix_config = config.prefixes[context] or {}
-	local icon = view.icon or prefix_config.icon or ""
+	local icon = view.icon or format.icon or ""
 	local prefix = current.prompt ~= "" and current.prompt or current.firstc
+	local hidden = 0
+	if context == "lua" then
+		local original = lines[1]
+		lines[1] = original:gsub("^%s*lua%s+", "")
+		hidden = #original - #lines[1]
+	elseif context == "help" then
+		local original = lines[1]
+		lines[1] = original:gsub("^%s*he?l?p?%s+", "")
+		hidden = #original - #lines[1]
+	end
 	if context == "expression" and current.firstc == "=" then
+		hidden = 1
 		lines[1] = lines[1]:sub(2)
 		prefix, icon = "", ""
 	end
@@ -207,7 +221,18 @@ local function redraw_cmdline()
 		lines[1] = prefix .. string.rep(" ", current.indent or 0) .. lines[1]
 	end
 	set_lines(cmd_buf, lines)
-	local cursor_col = #prefix + (current.indent or 0) + current.pos
+	vim.api.nvim_buf_clear_namespace(cmd_buf, ns, 0, -1)
+	if icon ~= "" then
+		vim.api.nvim_buf_add_highlight(
+			cmd_buf,
+			ns,
+			format.icon_hl_group or view.icon_hl_group or config.cmdline.opts.icon_hl_group,
+			0,
+			0,
+			#icon
+		)
+	end
+	local cursor_col = #prefix + (current.indent or 0) + math.max(0, current.pos - hidden)
 	local row = 0
 	for i = 1, #lines do
 		if cursor_col > #lines[i] then
@@ -232,29 +257,41 @@ local function open_cmdline()
 	if valid_win(cmd_win) then
 		return
 	end
+	if cmd_buf and vim.api.nvim_buf_is_valid(cmd_buf) then
+		cmd_buf = close(nil, cmd_buf)
+	end
 	cmd_buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_name(cmd_buf, "cmdline://input")
 	vim.api.nvim_buf_set_option(cmd_buf, "buftype", "nofile")
 	vim.api.nvim_buf_set_option(cmd_buf, "bufhidden", "wipe")
 	vim.api.nvim_buf_set_option(cmd_buf, "swapfile", false)
 	vim.api.nvim_buf_set_option(cmd_buf, "modifiable", false)
 	local width, rows = dimensions()
 	local view = active_view()
+	local format = format_for(view_name())
 	local height = math.min(8, math.max(1, #chunks_text(current.chunks)))
 	local col, row = position(width, height, rows)
-	cmd_win = vim.api.nvim_open_win(cmd_buf, false, {
+	local win_opts = {
 		relative = "editor",
 		row = row,
 		col = col,
 		width = width,
 		height = height,
 		style = "minimal",
-		border = view.border or config.border,
-		title = view.title,
-		title_pos = "center",
+		border = view.border or config.cmdline.opts.border,
 		focusable = false,
 		zindex = 200,
-	})
+	}
+	local title = format.title or view.title
+	if title then
+		win_opts.title = " " .. title .. " "
+		win_opts.title_pos = "center"
+	end
+	local ok, win = pcall(vim.api.nvim_open_win, cmd_buf, false, win_opts)
+	if not ok then
+		cmd_win, cmd_buf = close(nil, cmd_buf)
+		return
+	end
+	cmd_win = win
 	vim.api.nvim_set_option_value(
 		"winhighlight",
 		"Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle",
@@ -263,8 +300,16 @@ local function open_cmdline()
 	redraw_cmdline()
 end
 
+local function restore_cmdheight()
+	if mini_cmdheight then
+		vim.o.cmdheight = 0
+		mini_cmdheight = false
+	end
+end
+
 local function close_cmdline()
 	cmd_win, cmd_buf = close(cmd_win, cmd_buf)
+	restore_cmdheight()
 	vim.g.ui_cmdline_pos = nil
 	current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
 end
@@ -292,7 +337,12 @@ end
 
 local function open_pum(items, selected, row, col, grid)
 	close_pum()
-	if not config.popupmenu or external_completion_menu() or #items == 0 then
+	if
+		not config.popupmenu.enabled
+		or config.popupmenu.backend ~= "nui"
+		or external_completion_menu()
+		or #items == 0
+	then
 		return
 	end
 	pum_items, pum_selected = items, selected
@@ -367,74 +417,7 @@ local function should_notify_message(kind)
 	}, kind)
 end
 
-local function close_history()
-	local previous = history_prev_win
-	history_win, history_buf = close(history_win, history_buf)
-	history_prev_win = nil
-	if valid_win(previous) then
-		pcall(vim.api.nvim_set_current_win, previous)
-	end
-end
-
-local function show_history(entries)
-	close_history()
-	local lines = {}
-	for index, entry in ipairs(entries) do
-		local entry_lines = chunks_text(entry[2] or {})
-		if index > 1 and not entry[3] then
-			lines[#lines + 1] = ""
-		end
-		vim.list_extend(lines, entry_lines)
-	end
-	if #lines == 0 then
-		return
-	end
-
-	history_prev_win = vim.api.nvim_get_current_win()
-	history_buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_option(history_buf, "buftype", "nofile")
-	vim.api.nvim_buf_set_option(history_buf, "bufhidden", "wipe")
-	vim.api.nvim_buf_set_option(history_buf, "modifiable", true)
-	vim.api.nvim_buf_set_lines(history_buf, 0, -1, false, lines)
-	vim.api.nvim_buf_set_option(history_buf, "modifiable", false)
-	vim.api.nvim_buf_set_keymap(
-		history_buf,
-		"n",
-		"q",
-		"<Cmd>lua require('cmdline').close_history()<CR>",
-		{ silent = true, nowait = true }
-	)
-	vim.api.nvim_buf_set_keymap(
-		history_buf,
-		"n",
-		"<Esc>",
-		"<Cmd>lua require('cmdline').close_history()<CR>",
-		{ silent = true, nowait = true }
-	)
-
-	local width = math.max(40, math.min(vim.o.columns - 4, math.floor(vim.o.columns * 0.8)))
-	local height = math.max(1, math.min(#lines, vim.o.lines - 4))
-	history_win = vim.api.nvim_open_win(history_buf, true, {
-		relative = "editor",
-		row = math.max(0, math.floor((vim.o.lines - height) / 2)),
-		col = math.max(0, math.floor((vim.o.columns - width) / 2)),
-		width = width,
-		height = height,
-		style = "minimal",
-		border = config.border,
-		title = "Messages",
-		title_pos = "center",
-		zindex = 210,
-	})
-	vim.api.nvim_set_option_value(
-		"winhighlight",
-		"Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle",
-		{ win = history_win }
-	)
-	vim.api.nvim_set_option_value("wrap", true, { win = history_win })
-	vim.api.nvim_win_set_cursor(history_win, { 1, 0 })
-end
-
+local close_history, show_history = messages.new(chunks_text, close)
 M.close_history = close_history
 
 local function is_search_message(kind, chunks)
@@ -453,11 +436,18 @@ end
 local function handle(event, ...)
 	local args = { ... }
 	if event == "cmdline_show" then
+		if not config.cmdline.enabled then
+			return
+		end
 		cmdline_generation = cmdline_generation + 1
 		local generation = cmdline_generation
 		current.active = true
 		current.chunks, current.pos, current.firstc = args[1], args[2], args[3]
 		current.prompt, current.indent, current.level = args[4], args[5], args[6] or 0
+		if active_view().position == "mini" and not mini_cmdheight then
+			vim.o.cmdheight = 1
+			mini_cmdheight = true
+		end
 		vim.schedule(function()
 			if current.active and generation == cmdline_generation then
 				open_cmdline()
@@ -466,33 +456,55 @@ local function handle(event, ...)
 		end)
 		return true
 	elseif event == "cmdline_hide" then
+		if not config.cmdline.enabled then
+			return
+		end
 		cmdline_generation = cmdline_generation + 1
 		current.active = false
+		restore_cmdheight()
 		vim.schedule(close_cmdline)
 		vim.schedule(close_pum)
 		return true
 	elseif event == "cmdline_pos" then
+		if not config.cmdline.enabled then
+			return
+		end
 		current.pos = args[1] or current.pos
 		vim.schedule(redraw_cmdline)
 		return true
 	elseif event == "cmdline_special_char" then
+		if not config.cmdline.enabled then
+			return
+		end
 		-- UI2 includes this only for pending keys; the native cmdline remains authoritative.
 		return true
 	elseif event == "popupmenu_show" then
+		if not config.popupmenu.enabled then
+			return
+		end
 		vim.schedule(function()
 			open_pum(args[1] or {}, args[2] or -1, args[3] or 0, args[4] or 0, args[5])
 		end)
 		return true
 	elseif event == "popupmenu_select" then
+		if not config.popupmenu.enabled then
+			return
+		end
 		pum_selected = args[1] or -1
 		vim.schedule(redraw_pum)
 		return true
 	elseif event == "popupmenu_hide" then
+		if not config.popupmenu.enabled then
+			return
+		end
 		vim.schedule(close_pum)
 		return true
 	elseif event == "msg_show" then
+		if not config.messages.enabled then
+			return
+		end
 		local kind, chunks = args[1], args[2]
-		if config.notify_search and is_search_message(kind, chunks) then
+		if config.messages.view_search and config.cmdline.enabled and is_search_message(kind, chunks) then
 			vim.schedule(function()
 				notify_message(chunks, kind == "emsg" and vim.log.levels.ERROR or vim.log.levels.WARN, "Search")
 			end)
@@ -503,11 +515,17 @@ local function handle(event, ...)
 		end
 		return true
 	elseif event == "msg_history_show" then
+		if not config.messages.enabled then
+			return
+		end
 		vim.schedule(function()
 			show_history(args[1] or {})
 		end)
 		return true
 	elseif event == "msg_clear" or event == "msg_history_clear" then
+		if not config.messages.enabled then
+			return
+		end
 		if event == "msg_history_clear" then
 			vim.schedule(close_history)
 		end
@@ -542,25 +560,13 @@ local function patch_cmp()
 	cmp_patched = true
 end
 
-local function highlights()
-	vim.api.nvim_set_hl(0, "CmdlineNormal", { link = "NormalFloat", default = true })
-	vim.api.nvim_set_hl(0, "CmdlineBorder", { link = "FloatBorder", default = true })
-	vim.api.nvim_set_hl(0, "CmdlineTitle", { link = "FloatTitle", default = true })
-	vim.api.nvim_set_hl(0, "CmdlinePum", { link = "Pmenu", default = true })
-end
-
 ---@param opts? cmdline.Config
 function M.setup(opts)
-	config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
-	if opts and opts.position and not (opts.presets and opts.presets.middle) then
-		config.presets.middle.position = "custom"
-		config.presets.middle.x = opts.position.x
-		config.presets.middle.y = opts.position.y
-	end
-	if not config.enabled then
+	config = config_module.merge(opts)
+	if not config.cmdline.enabled and not config.messages.enabled then
 		return M
 	end
-	highlights()
+	highlights.setup(config)
 	if vim.fn.has("nvim-0.12") == 0 then
 		vim.notify("cmdline.nvim requires Neovim 0.12", vim.log.levels.WARN)
 		return M
