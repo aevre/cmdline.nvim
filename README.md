@@ -54,28 +54,28 @@ require("cmdline").setup({
       },
       icon_hl_group = "CmdlineIcon",
       presets = {
-        cmdline_popup = { position = "top", title = "Command", icon = ">" },
+        cmdline_popup = { position = "top", title = "Command", icon = "󰘳" },
         mini = { position = "mini", border = "none" },
         lua = { position = "top", title = "Lua", icon = "" },
-        filter = { position = "top", title = "Filter", icon = "!" },
-        help = { position = "top", title = "Help", icon = "?" },
-        input = { position = "top", title = "Input", icon = "?" },
-        rename = { position = "top", title = "Rename", icon = "R" },
+        filter = { position = "top", title = "Filter", icon = "󰈲" },
+        help = { position = "top", title = "Help", icon = "󰋖" },
+        input = { position = "top", title = "Input", icon = "󰌌" },
+        rename = { position = "top", title = "Rename", icon = "󰏫" },
       },
     },
     format = {
-      cmdline = { pattern = "^:", icon = ">", view = "cmdline_popup" },
-      search_down = { kind = "search", pattern = "^/", icon = "/", view = "mini" },
-      search_up = { kind = "search", pattern = "^%?", icon = "?", view = "mini" },
-      filter = { pattern = "^:%s*!", icon = "!", view = "filter" },
-      help = { pattern = "^:%s*he?l?p?%s+", icon = "?", view = "help" },
+      cmdline = { pattern = "^:", icon = "󰘳", view = "cmdline_popup" },
+      search_down = { kind = "search", pattern = "^/", icon = "", view = "mini" },
+      search_up = { kind = "search", pattern = "^%?", icon = "", view = "mini" },
+      filter = { pattern = "^:%s*!", icon = "󰈲", view = "filter" },
+      help = { pattern = "^:%s*he?l?p?%s+", icon = "󰋖", view = "help" },
       lua = {
         pattern = { "^:%s*lua%s+", "^:%s*lua%s*=%s*", "^:%s*=%s*" },
         icon = "",
         view = "lua",
       },
-      input = { view = "input", icon = "?" },
-      rename = { view = "rename", icon = "R" },
+      input = { view = "input", icon = "󰌌" },
+      rename = { view = "rename", icon = "󰏫" },
     },
   },
   messages = {
@@ -169,11 +169,11 @@ Add the matching format and preset:
 cmdline = {
   opts = {
     presets = {
-      git = { position = "top", title = "Git", icon = "G" },
+      git = { position = "top", title = "Git", icon = "󰊢" },
     },
   },
   format = {
-    git = { view = "git", icon = "G" },
+    git = { view = "git", icon = "󰊢" },
   },
 }
 ```
@@ -192,11 +192,11 @@ cmdline = {
   },
   opts = {
     presets = {
-      file = { position = "top", title = "File", icon = "F" },
+      file = { position = "top", title = "File", icon = "󰈔" },
     },
   },
   format = {
-    file = { view = "file", icon = "F" },
+    file = { view = "file", icon = "󰈔" },
   },
 }
 ```
