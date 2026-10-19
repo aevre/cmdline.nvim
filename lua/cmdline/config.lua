@@ -150,6 +150,7 @@
 ---@field pos integer Cursor byte position reported by UI2.
 ---@field indent? integer Number of leading indentation spaces.
 ---@field chunks cmdline.Content Original UI2 command-line content.
+---@field inherited_view? cmdline.View Layout inherited from the parent command line.
 
 ---@class cmdline.Module Public interface returned by `require("cmdline")`.
 ---@field setup fun(opts?: cmdline.Config): cmdline.Module Configure and attach the UI renderer.

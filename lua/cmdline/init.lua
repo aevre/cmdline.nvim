@@ -23,7 +23,6 @@ local function handle(event, ...)
 	return popupmenu.handle(event, ...) or messages.handle(event, ...)
 end
 
----@param opts? cmdline.Config Partial grouped configuration to merge with defaults.
 ---@return cmdline.Module module The public module for chaining and API access.
 function M.disable()
 	if not attached then
@@ -40,6 +39,7 @@ function M.disable()
 	return M
 end
 
+---@param opts? cmdline.Config Partial grouped configuration to merge with defaults.
 function M.setup(opts)
 	local config = config_module.merge(opts)
 	commandline.configure(config, ns)

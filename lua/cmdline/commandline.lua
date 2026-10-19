@@ -140,7 +140,7 @@ local function render_syntax_highlights(buf, namespace, text, lang, start_row, s
 	end
 	local parsed, trees = pcall(parser.parse, parser)
 	local query_ok, query = pcall(vim.treesitter.query.get, lang, "highlights")
-	if not parsed or not query_ok or not query then
+	if not parsed or not trees or not query_ok or not query then
 		return
 	end
 	local function_captures = {}

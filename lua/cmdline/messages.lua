@@ -91,7 +91,6 @@ local function clear_notification()
 	persistent_notification = false
 end
 
----@param chunks cmdline.Content Message chunks including highlight ids.
 local function render_notifications()
 	if notification_timer then
 		notification_timer:stop()
