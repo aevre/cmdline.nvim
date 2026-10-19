@@ -157,6 +157,35 @@ The resolution order is:
 2. Built-in extensions.
 3. The generic `cmdline` context.
 
+Add extensions in the plugin's normal `setup()` options. For example, this `lazy.nvim` spec recognizes `:Git ...` and assigns it a dedicated layout:
+
+```lua
+{
+  "https://codeberg.org/aevre/cmdline.nvim",
+  opts = {
+    cmdline = {
+      extensions = {
+        function(state)
+          if state.firstc == ":" and state.lines[1]:match("^Git%s") then
+            return "git"
+          end
+        end,
+      },
+      opts = {
+        presets = {
+          git = { position = "top", title = "Git", icon = "󰊢" },
+        },
+      },
+      format = {
+        git = { view = "git", icon = "󰊢" },
+      },
+    },
+  },
+}
+```
+
+Use `state.firstc` and `state.lines` to classify command lines, or `state.prompt` to classify `input()` prompts. The returned name must match both a `format` entry and a preset referenced by that format's `view`.
+
 ### Function extensions
 
 A function receives a state table:

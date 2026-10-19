@@ -157,6 +157,35 @@ messages = {
 2. 内置扩展。
 3. 通用的 `cmdline` context。
 
+在插件常规的 `setup()` 配置中添加扩展即可。下面的 `lazy.nvim` 插件 spec 会识别 `:Git ...`，并为它指定独立布局：
+
+```lua
+{
+  "https://codeberg.org/aevre/cmdline.nvim",
+  opts = {
+    cmdline = {
+      extensions = {
+        function(state)
+          if state.firstc == ":" and state.lines[1]:match("^Git%s") then
+            return "git"
+          end
+        end,
+      },
+      opts = {
+        presets = {
+          git = { position = "top", title = "Git", icon = "󰊢" },
+        },
+      },
+      format = {
+        git = { view = "git", icon = "󰊢" },
+      },
+    },
+  },
+}
+```
+
+可以用 `state.firstc` 和 `state.lines` 分类命令行，或用 `state.prompt` 分类 `input()` 提示。返回的名称必须对应一个 `format` 项，且该项 `view` 指向已配置的 preset。
+
 ### 函数扩展
 
 函数接收一个状态表：
