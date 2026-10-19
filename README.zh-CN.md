@@ -106,6 +106,17 @@ require("cmdline").setup({
 - `opts.presets`：可复用的布局定义。
 - `format`：将 context 或命令模式映射到预设和显示属性。
 
+命令行浮动窗口会在窗口局部使用 `virtualedit=onemore`，使光标可以显示在渲染图标和空格之后，同时不会改变普通编辑窗口的设置。光标形状仍由 Neovim 的 `guicursor` 控制；可以通过 `c:` 模式项配置命令行输入时的光标，例如：
+
+```lua
+vim.opt.guicursor = {
+  "n-v-sm:block-Cursor",
+  "i-ci-ve:ver25-Cursor",
+  "c:ver25-Cursor",
+  "r-cr-o:hor20-Cursor",
+}
+```
+
 ### `messages`
 
 - `enabled`：启用 UI2 消息处理。

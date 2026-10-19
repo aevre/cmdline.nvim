@@ -106,6 +106,17 @@ require("cmdline").setup({
 - `opts.presets`: reusable layout definitions.
 - `format`: maps a context or command pattern to a preset and presentation values.
 
+The command-line window uses a local `virtualedit=onemore` setting so the cursor can appear after the rendered icon and spacing without changing your normal editing windows. Cursor shape remains controlled by Neovim's `guicursor` setting; use the `c:` mode entry for command-line input, for example:
+
+```lua
+vim.opt.guicursor = {
+  "n-v-sm:block-Cursor",
+  "i-ci-ve:ver25-Cursor",
+  "c:ver25-Cursor",
+  "r-cr-o:hor20-Cursor",
+}
+```
+
 ### `messages`
 
 - `enabled`: enable UI2 message handling.

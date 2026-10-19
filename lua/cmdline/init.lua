@@ -292,6 +292,7 @@ local function open_cmdline()
 		return
 	end
 	cmd_win = win
+	vim.api.nvim_set_option_value("virtualedit", "onemore", { win = cmd_win })
 	vim.api.nvim_set_option_value(
 		"winhighlight",
 		"Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle",
