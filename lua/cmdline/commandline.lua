@@ -18,6 +18,7 @@ local mini_cmdheight = false
 local original_cmdheight
 ---@type cmdline.CommandlineState
 local current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
+local cmdline_states = {}
 local cmdline_generation = 0
 local search_buf
 local command_block = {}
@@ -122,7 +123,13 @@ active_view = function()
 	local context = view_name()
 	local format = format_for(context)
 	local name = format.view or config.cmdline.view
-	return config.cmdline.opts.presets[name] or config.cmdline.opts.presets.cmdline_popup
+	local view = vim.deepcopy(config.cmdline.opts.presets[name] or config.cmdline.opts.presets.cmdline_popup)
+	if current.inherited_view then
+		for _, key in ipairs({ "position", "width", "border", "x", "y" }) do
+			view[key] = current.inherited_view[key]
+		end
+	end
+	return view
 end
 
 ---@return nil
@@ -182,9 +189,9 @@ local function redraw_cmdline()
 		height = height,
 		border = view.border or config.cmdline.opts.border,
 	}
-	local title = format.title or view.title
+	local title = view.position == "mini" and nil or format.title or view.title
+	win_config.title = title and (" " .. title .. " ") or ""
 	if title then
-		win_config.title = " " .. title .. " "
 		win_config.title_pos = "center"
 	end
 	local ok = pcall(vim.api.nvim_win_set_config, win, win_config)
@@ -193,12 +200,21 @@ local function redraw_cmdline()
 	end
 	local input_row = #block_lines
 	local lines
-	local icon = current.prompt ~= "" and "" or (view.icon or format.icon or "")
+	local icon = current.prompt ~= "" and "" or (format.icon or view.icon or "")
 	local prefix = current.prompt ~= "" and current.prompt or current.firstc
 	local hidden = 0
 	if context == "lua" then
 		local original = input_lines[1]
-		input_lines[1] = original:gsub("^%s*lua%s+", "")
+		input_lines[1] = original:gsub("^%s*lua%s*=%s*", "")
+		if input_lines[1] == original then
+			input_lines[1] = original:gsub("^%s*lua%s+", "")
+		end
+		if input_lines[1] == original then
+			input_lines[1] = original:gsub("^%s*=%s*", "")
+			if input_lines[1] ~= original and current.firstc == ":" then
+				prefix = ""
+			end
+		end
 		hidden = #original - #input_lines[1]
 	elseif context == "help" then
 		local original = input_lines[1]
@@ -206,9 +222,11 @@ local function redraw_cmdline()
 		hidden = #original - #input_lines[1]
 	end
 	if context == "expression" and current.firstc == "=" then
-		hidden = 1
-		input_lines[1] = input_lines[1]:sub(2)
-		prefix, icon = "", ""
+		if input_lines[1]:sub(1, 1) == "=" then
+			hidden = 1
+			input_lines[1] = input_lines[1]:sub(2)
+		end
+		prefix = ""
 	end
 	lines = vim.list_extend(vim.deepcopy(block_lines), vim.deepcopy(input_lines))
 	if icon ~= "" then
@@ -300,8 +318,8 @@ local function open_cmdline()
 		zindex = 200,
 	}
 	local title = format.title or view.title
+	win_opts.title = title and (" " .. title .. " ") or ""
 	if title then
-		win_opts.title = " " .. title .. " "
 		win_opts.title_pos = "center"
 	end
 	local ok, win = pcall(vim.api.nvim_open_win, buf, false, win_opts)
@@ -334,6 +352,7 @@ local function close_cmdline()
 	restore_cmdheight()
 	vim.g.ui_cmdline_pos = nil
 	current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
+	cmdline_states = {}
 end
 
 ---@return nil
@@ -375,13 +394,18 @@ function M.handle(event, ...)
 		if not config.cmdline.enabled then
 			return
 		end
+		local chunks, firstc, prompt, level = args[1], args[3], args[4], args[6] or 0
 		search_abort_generation = search_abort_generation + 1
 		search_aborted = false
-		if not current.active or current.firstc ~= args[3] or not args[3]:match("^[/?]$") then
+		if
+			not current.active
+			or (current.level == level and (current.firstc ~= firstc or not firstc:match("^[/?]$")))
+		then
 			clear_search_count()
 		end
-		cmdline_generation = cmdline_generation + 1
-		local chunks, firstc, prompt, level = args[1], args[3], args[4], args[6] or 0
+		if current.active then
+			cmdline_states[current.level] = current
+		end
 		if
 			special_char
 			and (
@@ -395,17 +419,26 @@ function M.handle(event, ...)
 		end
 		cmdline_generation = cmdline_generation + 1
 		local generation = cmdline_generation
+		local state = cmdline_states[level] or {}
+		if state ~= current and current.active and not state.inherited_view then
+			state.inherited_view = active_view()
+		end
+		current = state
 		current.active = true
 		command_block = {}
 		current.chunks, current.pos, current.firstc = chunks, args[2], firstc
 		current.prompt, current.indent, current.level = prompt, args[5], level
+		cmdline_states[level] = current
 		if active_view().position == "mini" and not mini_cmdheight then
 			original_cmdheight = vim.o.cmdheight
 			vim.o.cmdheight = 1
 			mini_cmdheight = true
+		elseif active_view().position ~= "mini" then
+			restore_cmdheight()
 		end
 		vim.schedule(function()
-			if current.active and generation == cmdline_generation then
+			if state.active and generation == cmdline_generation then
+				current = state
 				open_cmdline()
 				redraw_cmdline()
 			end
@@ -416,8 +449,14 @@ function M.handle(event, ...)
 			return
 		end
 		local args = { ... }
+		local level = args[1] or current.level
+		local hidden = cmdline_states[level] or (current.level == level and current)
+		cmdline_states[level] = nil
 		cmdline_generation = cmdline_generation + 1
-		if current.firstc:match("^[/?]$") and args[2] then
+		if level ~= current.level then
+			return true
+		end
+		if hidden and hidden.firstc:match("^[/?]$") and args[2] then
 			search_abort_generation = search_abort_generation + 1
 			local generation = search_abort_generation
 			search_aborted = true
@@ -427,7 +466,25 @@ function M.handle(event, ...)
 				end
 			end)
 		end
+		local parent_level
+		for active_level in pairs(cmdline_states) do
+			if active_level < level and (not parent_level or active_level > parent_level) then
+				parent_level = active_level
+			end
+		end
+		if parent_level then
+			current = cmdline_states[parent_level]
+			cmdline_generation = cmdline_generation + 1
+			local generation = cmdline_generation
+			vim.schedule(function()
+				if current.active and generation == cmdline_generation then
+					redraw_cmdline()
+				end
+			end)
+			return true
+		end
 		current.active = false
+		cmdline_states = {}
 		clear_search_count()
 		restore_cmdheight()
 		vim.schedule(close_cmdline)
@@ -437,30 +494,43 @@ function M.handle(event, ...)
 			return
 		end
 		local args = { ... }
-		current.pos = args[1] or current.pos
-		special_char = nil
-		vim.schedule(redraw_cmdline)
+		local level = args[2] or current.level
+		local state = cmdline_states[level] or (current.level == level and current)
+		if state then
+			state.pos = args[1] or state.pos
+		end
+		if current.level == level then
+			special_char = nil
+			vim.schedule(redraw_cmdline)
+		end
 		return true
 	elseif event == "cmdline_special_char" then
 		if not config.cmdline.enabled then
 			return
 		end
 		local char, shift, level = ...
+		level = level or current.level
+		local state = cmdline_states[level] or (current.level == level and current)
+		if not state then
+			return true
+		end
 		special_char = {
 			char = char,
 			shift = shift,
 			level = level,
-			firstc = current.firstc,
-			prompt = current.prompt,
-			content = table.concat(chunks_text(current.chunks)),
+			firstc = state.firstc,
+			prompt = state.prompt,
+			content = table.concat(chunks_text(state.chunks)),
 		}
-		local generation = cmdline_generation
-		vim.schedule(function()
-			if current.active and generation == cmdline_generation then
-				open_cmdline()
-				redraw_cmdline()
-			end
-		end)
+		if current.level == level then
+			local generation = cmdline_generation
+			vim.schedule(function()
+				if current.active and generation == cmdline_generation then
+					open_cmdline()
+					redraw_cmdline()
+				end
+			end)
+		end
 		return true
 	elseif event == "cmdline_block_show" then
 		if not config.cmdline.enabled then
@@ -678,6 +748,7 @@ function M.teardown()
 	end
 	vim.g.ui_cmdline_pos = nil
 	current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
+	cmdline_states = {}
 	command_block = {}
 	special_char = nil
 end

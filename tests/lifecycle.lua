@@ -30,9 +30,81 @@ local function drain()
 end
 
 assert(dispatch("cmdline_show", { { 0, "stale" } }, 5, ":", "", 0, 1))
-assert(dispatch("cmdline_hide"))
+assert(dispatch("cmdline_hide", 1, false))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
+
+assert(dispatch("cmdline_show", { { 0, "echo input(" } }, 11, ":", "", 0, 1))
+drain()
+local nested_win
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if vim.api.nvim_win_get_config(win).relative ~= "" then
+		nested_win = win
+	end
+end
+assert(nested_win)
+local function has_title(win, title)
+	return vim.inspect(vim.api.nvim_win_get_config(win).title):find(title, 1, true) ~= nil
+end
+assert(has_title(nested_win, "Command"))
+assert(dispatch("cmdline_show", { { 0, "1 + 2" } }, 5, "=", "", 0, 2))
+drain()
+assert(vim.api.nvim_win_is_valid(nested_win))
+assert(has_title(nested_win, "Expression"))
+local inner_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+assert(inner_line:find("", 1, true) and inner_line:find("1 + 2", 1, true), vim.inspect(inner_line))
+assert(dispatch("cmdline_pos", 2, 2))
+drain()
+assert(dispatch("cmdline_hide", 2, false))
+drain()
+assert(vim.api.nvim_win_is_valid(nested_win))
+assert(has_title(nested_win, "Command"))
+local parent_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+assert(parent_line:find("echo input(", 1, true), vim.inspect(parent_line))
+assert(dispatch("cmdline_hide", 1, false))
+drain()
+assert(not vim.api.nvim_win_is_valid(nested_win))
+
+assert(dispatch("cmdline_show", { { 0, "= 1 + 2" } }, 8, ":", "", 0, 1))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if vim.api.nvim_win_get_config(win).relative ~= "" then
+		nested_win = win
+	end
+end
+assert(has_title(nested_win, "Lua"))
+local lua_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+assert(lua_line:find("", 1, true) and lua_line:find("1 + 2", 1, true), vim.inspect(lua_line))
+assert(has_title(nested_win, "Lua"))
+assert(not lua_line:find(":=", 1, true), vim.inspect(lua_line))
+assert(dispatch("cmdline_hide", 1, false))
+drain()
+
+local config = require("cmdline.config")
+local mini_parent = config.merge()
+mini_parent.cmdline.format.cmdline.view = "mini"
+require("cmdline.commandline").configure(mini_parent, vim.api.nvim_create_namespace("cmdline.test"))
+assert(dispatch("cmdline_show", { { 0, "echo input(" } }, 11, ":", "", 0, 1))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if vim.api.nvim_win_get_config(win).relative ~= "" then
+		nested_win = win
+	end
+end
+assert(dispatch("cmdline_show", { { 0, "1 + 2" } }, 5, "=", "", 0, 2))
+drain()
+local mini_config = vim.api.nvim_win_get_config(nested_win)
+assert(mini_config.col == 0 and mini_config.width == vim.o.columns)
+assert(mini_config.border == nil or mini_config.border == "none")
+local mini_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+assert(mini_line:find("", 1, true) and mini_line:find("1 + 2", 1, true), vim.inspect(mini_line))
+assert(dispatch("cmdline_hide", 2, false))
+drain()
+assert(vim.api.nvim_win_get_config(nested_win).width == vim.o.columns)
+assert(dispatch("cmdline_hide", 1, false))
+drain()
+local resolved_config = require("cmdline.config").merge()
+require("cmdline.commandline").configure(resolved_config, vim.api.nvim_create_namespace("cmdline.nvim"))
 
 assert(dispatch("cmdline_show", { { 0, "search" } }, 6, "/", "", 0, 1))
 drain()

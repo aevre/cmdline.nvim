@@ -64,7 +64,7 @@ M.builtin = {
 	end,
 	function(state)
 		local text = command(state)
-		if text:match("^lua%s+") or text:match("^lua%s*=") then
+		if text:match("^lua%s+") or text:match("^lua%s*=") or (state.firstc == ":" and text:match("^=%s*")) then
 			return "lua"
 		elseif text:match("^s/") or text:match("^substitute%f[%W]") then
 			return "substitute"
