@@ -552,6 +552,7 @@ function M.refresh_search_count()
 		local mark = { id = 1, virt_text = search_chunks }
 		local line = vim.api.nvim_buf_get_lines(buf, cursor[1] - 1, cursor[1], false)[1] or ""
 		local start_col, end_col = cursor[2], cursor[2]
+		local match_byte_start
 		if search_buf and search_buf ~= buf and vim.api.nvim_buf_is_valid(search_buf) then
 			vim.api.nvim_buf_clear_namespace(search_buf, search_ns, 0, -1)
 		end
@@ -562,10 +563,21 @@ function M.refresh_search_count()
 			search_buf = nil
 			return
 		end
-		start_col = vim.fn.byteidx(line, match_pos[2] - 1)
-		local match = vim.fn.matchstr(line:sub(start_col + 1), pattern)
-		end_col = start_col + #match
-		if cursor[2] < start_col or cursor[2] >= end_col then
+		local match_data = vim.fn.matchstrpos(line, pattern, 0)
+		match_byte_start, end_col = match_data[2], match_data[3]
+		if match_byte_start < 0 then
+			vim.api.nvim_buf_clear_namespace(buf, search_ns, 0, -1)
+			search_buf = nil
+			return
+		end
+		start_col = match_byte_start
+		if end_col == start_col then
+			if cursor[2] ~= start_col or match_byte_start ~= start_col then
+				vim.api.nvim_buf_clear_namespace(buf, search_ns, 0, -1)
+				search_buf = nil
+				return
+			end
+		elseif cursor[2] < start_col or cursor[2] >= end_col then
 			vim.api.nvim_buf_clear_namespace(buf, search_ns, 0, -1)
 			search_buf = nil
 			return

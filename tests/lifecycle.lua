@@ -182,6 +182,39 @@ marks = vim.api.nvim_buf_get_extmarks(
 	{ details = true }
 )
 assert(#marks == 1 and marks[1][4].virt_text_win_col < edge_col)
+vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { "中foo foo" })
+vim.fn.setreg("/", "foo\\zs")
+vim.v.hlsearch = 1
+vim.api.nvim_win_set_cursor(0, { 1, 6 })
+assert(dispatch("msg_show", "search_count", { { 0, " [1/2]  " } }, false, false, false, 0, "search"))
+drain()
+marks = vim.api.nvim_buf_get_extmarks(
+	source_buf,
+	vim.api.nvim_get_namespaces()["cmdline.search_count"],
+	0,
+	-1,
+	{ details = true }
+)
+assert(#marks == 1 and marks[1][3] == 6)
+vim.api.nvim_win_set_cursor(0, { 1, 5 })
+require("cmdline.commandline").refresh_search_count()
+drain()
+assert(
+	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
+)
+vim.fn.setreg("/", "foo")
+vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { "中foo foo" })
+vim.api.nvim_win_set_cursor(0, { 1, 3 })
+assert(dispatch("msg_show", "search_count", { { 0, " [1/2]  " } }, false, false, false, 0, "search"))
+drain()
+marks = vim.api.nvim_buf_get_extmarks(
+	source_buf,
+	vim.api.nvim_get_namespaces()["cmdline.search_count"],
+	0,
+	-1,
+	{ details = true }
+)
+assert(#marks == 1 and marks[1][3] == 3)
 assert(dispatch("cmdline_show", { { 0, "command" } }, 4, ":", "", 0, 1))
 drain()
 assert(
