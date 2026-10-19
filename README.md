@@ -85,10 +85,6 @@ require("cmdline").setup({
   popupmenu = {
     enabled = true,
     backend = "nui",
-    kind_icons = {
-      Function = "ƒ",
-      Variable = "󰀫",
-    },
   },
 })
 ```
@@ -142,7 +138,8 @@ The default count uses Neovim's compact `[current/total]` style, as in Noice. Th
 
 - `enabled`: enable popupmenu handling.
 - `backend`: use `"nui"` for the built-in fallback window or `"cmp"` when an external completion backend should own the menu.
-- `kind_icons`: defaults to a built-in completion-kind icon map. Override entries with a table, use an empty table to hide icons, or set it to `false` to disable them. Kinds missing from the map get a blank aligned slot.
+- `border`: popup window border; defaults to `"rounded"` and accepts the standard Neovim floating-window border formats.
+- `kind_icons`: defaults to built-in completion-kind icons, including Neovim's single-letter kinds. Items without a mapped kind use the built-in generic icon. Provide a complete replacement map to customize it, use an empty table to hide icons, or set it to `false` to disable them.
 
 When Blink or nvim-cmp is loaded in command-line mode, `cmdline.nvim` does not draw a duplicate popupmenu. The completion plugin owns its menu while `cmdline.nvim` supplies the floating command-line position.
 

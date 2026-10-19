@@ -10,27 +10,43 @@ local pum_first = 1
 local pum_height = 0
 local pum_icon_width = 0
 local pum_show_icons = false
+local pum_ns = vim.api.nvim_create_namespace("cmdline.popupmenu")
 
 local function redraw_pum()
 	if not valid_win(pum_win) then
 		return
 	end
-	if pum_selected >= 0 then
-		pum_first = math.max(1, math.min(pum_selected + 1, #pum_items - pum_height + 1))
+	local viewport_row = pum_selected - pum_first + 2
+	if viewport_row >= pum_height - 2 then
+		pum_first = math.min(pum_selected - pum_height + 4, #pum_items - pum_height + 1)
+	elseif pum_selected >= 0 and viewport_row < 3 then
+		pum_first = math.max(1, pum_selected - 1)
 	end
 	local lines = {}
+	local selected_line
 	local icons = config.popupmenu.kind_icons
 	for i = pum_first, math.min(#pum_items, pum_first + pum_height - 1) do
 		local item = pum_items[i]
 		local label = item.word or item[1] or ""
-		local icon = type(icons) == "table" and icons[item.kind or item[2]] or nil
-		local prefix = i == pum_selected + 1 and "> " or "  "
-		if pum_show_icons then
-			prefix = prefix .. (icon or "") .. string.rep(" ", pum_icon_width - vim.fn.strdisplaywidth(icon or "") + 1)
-		end
+		local icon = type(icons) == "table" and (icons[item.kind or item[2]] or icons.default) or nil
+		icon = icon or "󰘦"
+		local prefix = pum_show_icons
+				and ((icon or "") .. string.rep(" ", pum_icon_width - vim.fn.strdisplaywidth(icon or "") + 1))
+			or ""
 		lines[#lines + 1] = prefix .. label
+		if i == pum_selected + 1 then
+			selected_line = #lines - 1
+		end
 	end
 	set_lines(pum_buf, lines)
+	vim.api.nvim_buf_clear_namespace(pum_buf, pum_ns, 0, -1)
+	if selected_line then
+		vim.api.nvim_buf_set_extmark(pum_buf, pum_ns, selected_line, 0, {
+			end_row = selected_line + 1,
+			hl_group = "PmenuSel",
+			hl_eol = true,
+		})
+	end
 end
 
 local function close_pum()
@@ -85,7 +101,7 @@ local function open_pum(items, selected, row, col, grid)
 		width = math.min(width, vim.o.columns - math.max(0, col)),
 		height = height,
 		style = "minimal",
-		border = "single",
+		border = config.popupmenu.border,
 		focusable = false,
 		zindex = 201,
 	}

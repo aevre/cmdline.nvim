@@ -99,6 +99,7 @@
 ---@class cmdline.PopupmenuConfig Configuration for the completion popup renderer.
 ---@field enabled? boolean Whether popupmenu rendering is active.
 ---@field backend? cmdline.PopupBackend Renderer that owns command-line completions.
+---@field border? cmdline.Border Popup window border style.
 ---@field kind_icons? table<string, string>|false Icons keyed by completion kind, or `false` to disable icons.
 
 ---@class cmdline.Config User-facing grouped plugin configuration.
@@ -133,6 +134,7 @@
 ---@class cmdline.ResolvedPopupmenuConfig Complete popupmenu settings after merging defaults.
 ---@field enabled boolean Whether popupmenu rendering is active.
 ---@field backend cmdline.PopupBackend Renderer that owns command-line completions.
+---@field border cmdline.Border Popup window border style.
 ---@field kind_icons table<string, string>|false Icons keyed by completion kind, or `false` to disable icons.
 
 ---@class cmdline.ResolvedConfig Complete plugin configuration after merging defaults.
@@ -214,8 +216,15 @@ M.defaults = {
 	popupmenu = {
 		enabled = true,
 		backend = "nui",
+		border = "rounded",
 		kind_icons = {
+			default = "󰘦",
 			Class = "󰠱",
+			d = "󰊕",
+			f = "ƒ",
+			m = "󰜢",
+			t = "󰕳",
+			v = "󰀫",
 			Color = "󰏘",
 			Constant = "󰏿",
 			Constructor = "",

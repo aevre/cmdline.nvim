@@ -85,10 +85,6 @@ require("cmdline").setup({
   popupmenu = {
     enabled = true,
     backend = "nui",
-    kind_icons = {
-      Function = "ƒ",
-      Variable = "󰀫",
-    },
   },
 })
 ```
@@ -142,7 +138,8 @@ messages = {
 
 - `enabled`：启用 popupmenu 处理。
 - `backend`：使用 `"nui"` 启用内置备用窗口，使用 `"cmp"` 时交给外部补全后端。
-- `kind_icons`：默认使用内置的补全类型图标映射。可用表覆盖映射项，空表隐藏图标，设为 `false` 可显式禁用。未映射的类型保留对齐空位。
+- `border`：补全面板边框，默认 `"rounded"`，支持 Neovim 标准浮窗边框格式。
+- `kind_icons`：默认使用内置补全类型图标，包含 Neovim 的单字母类型；没有映射的类型使用通用图标。自定义时需提供完整映射表；空表隐藏图标，设为 `false` 可显式禁用。
 
 当 Blink 或 nvim-cmp 在命令行模式中加载时，`cmdline.nvim` 不会绘制重复的 popupmenu。补全插件负责菜单，`cmdline.nvim` 提供浮动命令行位置。
 

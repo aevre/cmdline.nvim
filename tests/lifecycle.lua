@@ -341,11 +341,11 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 	end
 end
 assert(cmd_win and vim.wo[cmd_win].virtualedit == "onemore")
-local popup_config = require("cmdline.config").merge({ popupmenu = { kind_icons = { Function = "ƒ" } } })
+local popup_config = require("cmdline.config").merge()
 require("cmdline.popupmenu").configure(popup_config)
 local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(cmd_win), 0, -1, false)
 assert(lines[1]:find("print('中文')", 1, true) and not lines[1]:find("lua", 1, true))
-assert(dispatch("popupmenu_show", { { "one", "Function" }, { "two", "Unknown" } }, 0, 0, 0, -1))
+assert(dispatch("popupmenu_show", { { "one", "f" }, { "two", "Unknown" }, { "three", "" } }, 0, 0, 0, -1))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline + 2)
 local kind_icon_lines, kind_icon_win
@@ -355,8 +355,23 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 		kind_icon_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
 	end
 end
-assert(kind_icon_lines and kind_icon_lines[1] == "> ƒ one" and kind_icon_lines[2] == "    two")
-assert(vim.api.nvim_win_get_width(kind_icon_win) >= vim.fn.strdisplaywidth("  ƒ one"))
+assert(
+	kind_icon_lines
+		and kind_icon_lines[1] == "ƒ one"
+		and kind_icon_lines[2] == "󰘦 two"
+		and kind_icon_lines[3] == "󰘦 three"
+)
+assert(popup_config.popupmenu.kind_icons.f == "ƒ")
+assert(vim.api.nvim_win_get_config(kind_icon_win).border[1] == "╭")
+assert(vim.api.nvim_win_get_width(kind_icon_win) >= vim.fn.strdisplaywidth("ƒ one"))
+local selected_marks = vim.api.nvim_buf_get_extmarks(
+	vim.api.nvim_win_get_buf(kind_icon_win),
+	vim.api.nvim_get_namespaces()["cmdline.popupmenu"],
+	0,
+	-1,
+	{ details = true }
+)
+assert(#selected_marks == 1 and selected_marks[1][4].hl_group == "PmenuSel")
 for _, win in ipairs(vim.api.nvim_list_wins()) do
 	local opts = vim.api.nvim_win_get_config(win)
 	if opts.relative == "win" then
@@ -365,17 +380,35 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 end
 assert(dispatch("popupmenu_select", 1))
 drain()
-local popup_without_icons = require("cmdline.config").merge({ popupmenu = { kind_icons = false } })
+local popup_without_icons = require("cmdline.config").merge({
+	popupmenu = { kind_icons = false, border = "single" },
+})
 require("cmdline.popupmenu").configure(popup_without_icons)
 local completion_items = {}
-for i = 1, 13 do
+for i = 1, 20 do
 	completion_items[i] = { "item" .. i }
 end
 assert(dispatch("popupmenu_show", completion_items, 0, 0, 0, -1))
 drain()
-assert(dispatch("popupmenu_select", 12))
-drain()
 local popup_lines
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local opts = vim.api.nvim_win_get_config(win)
+	if opts.relative == "win" and opts.zindex == 201 then
+		popup_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	end
+end
+assert(popup_lines and popup_lines[1] == "item1" and popup_lines[12] == "item12")
+assert(dispatch("popupmenu_select", 7))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local opts = vim.api.nvim_win_get_config(win)
+	if opts.relative == "win" and opts.zindex == 201 then
+		popup_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	end
+end
+assert(popup_lines and popup_lines[1] == "item1")
+assert(dispatch("popupmenu_select", 11))
+drain()
 for _, win in ipairs(vim.api.nvim_list_wins()) do
 	local opts = vim.api.nvim_win_get_config(win)
 	if opts.relative == "win" and opts.zindex == 201 then
@@ -383,7 +416,35 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 		assert(opts.height == 12)
 	end
 end
-assert(popup_lines and #popup_lines == 12 and popup_lines[1] == "  item2" and popup_lines[12] == "> item13")
+assert(popup_lines and #popup_lines == 12 and popup_lines[1] == "item3" and popup_lines[10] == "item12")
+assert(dispatch("popupmenu_select", 4))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local opts = vim.api.nvim_win_get_config(win)
+	if opts.relative == "win" and opts.zindex == 201 then
+		popup_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	end
+end
+assert(popup_lines and popup_lines[1] == "item3")
+assert(dispatch("popupmenu_select", 3))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local opts = vim.api.nvim_win_get_config(win)
+	if opts.relative == "win" and opts.zindex == 201 then
+		popup_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	end
+end
+assert(popup_lines and popup_lines[1] == "item2")
+assert(dispatch("popupmenu_select", 2))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local opts = vim.api.nvim_win_get_config(win)
+	if opts.relative == "win" and opts.zindex == 201 then
+		popup_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+		assert(opts.border[1] == "┌")
+	end
+end
+assert(popup_lines and popup_lines[1] == "item1")
 assert(dispatch("cmdline_hide"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
