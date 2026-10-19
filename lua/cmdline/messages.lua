@@ -266,6 +266,9 @@ function M.handle(event, ...)
 		end
 		local kind, chunks = args[1], args[2]
 		local replace_last, append, id = args[3], args[5], args[6]
+		if kind == "shell_cmd" then
+			return
+		end
 		if kind ~= "search_count" and kind ~= "confirm" and not should_notify_message(kind) then
 			kind = ""
 		end

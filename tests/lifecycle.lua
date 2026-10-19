@@ -550,6 +550,23 @@ assert(table.concat(updated_lines, "\n") == "updated first\nreplacement", vim.in
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
+assert(dispatch("msg_show", "shell_err", { { 0, "shell stderr" } }, false, false, false, 14))
+assert(dispatch("msg_show", "shell_out", { { 0, "shell stdout" } }, false, false, false, 15))
+assert(dispatch("msg_show", "shell_ret", { { 0, "shell status" } }, false, false, false, 16))
+assert(dispatch("msg_show", "shell_cmd", { { 0, "shell command" } }, false, false, false, 17) == nil)
+drain()
+local shell_error_visible, shell_stdout_visible, shell_status_visible = false, false, false
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	local text = table.concat(lines, "\n")
+	shell_error_visible = shell_error_visible or text:find("shell stderr", 1, true) ~= nil
+	shell_stdout_visible = shell_stdout_visible or text:find("shell stdout", 1, true) ~= nil
+	shell_status_visible = shell_status_visible or text:find("shell status", 1, true) ~= nil
+end
+assert(shell_error_visible and shell_stdout_visible and shell_status_visible)
+assert(dispatch("msg_clear"))
+drain()
+assert(#vim.api.nvim_list_wins() == baseline)
 assert(dispatch("msg_show", "confirm", { { 0, "Save changes?" } }, false, false, false, 11))
 drain()
 local confirm_win
