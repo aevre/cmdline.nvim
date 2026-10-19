@@ -7,9 +7,9 @@ M.defaults = {
 		extensions = {},
 		opts = {
 			highlights = {
-				normal = "FzfLuaNormal",
-				border = "FzfLuaBorder",
-				title = "FzfLuaTitle",
+				normal = "NormalFloat",
+				border = "FloatBorder",
+				title = "FloatTitle",
 				icon = "Special",
 				pum = "Pmenu",
 			},
