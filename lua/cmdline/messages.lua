@@ -67,6 +67,7 @@ end
 local notification_buf, notification_win
 local notification_timer
 local notification_ns = vim.api.nvim_create_namespace("cmdline.messages")
+local visible_messages = {}
 local generation = 0
 
 local function clear_notification()
@@ -76,11 +77,27 @@ local function clear_notification()
 		notification_timer = nil
 	end
 	notification_win, notification_buf = close(notification_win, notification_buf)
+	visible_messages = {}
 end
 
 ---@param chunks cmdline.Content Message chunks including highlight ids.
-local function show_notification(chunks)
-	clear_notification()
+local function render_notifications()
+	if notification_timer then
+		notification_timer:stop()
+		notification_timer:close()
+		notification_timer = nil
+	end
+	notification_win, notification_buf = close(notification_win, notification_buf)
+	local chunks = {}
+	for index, message in ipairs(visible_messages) do
+		if index > 1 then
+			chunks[#chunks + 1] = { 0, "\n" }
+		end
+		vim.list_extend(chunks, message.chunks)
+	end
+	if #chunks == 0 then
+		return
+	end
 	local lines = chunks_text(chunks)
 	local width = vim.o.columns
 	local height = 0
@@ -131,14 +148,43 @@ end
 local forwarding_message = false
 
 ---@param chunks cmdline.Content Message chunks to route.
+---@param replace_last boolean? Replace the most recent visible message.
+---@param append boolean? Append chunks to the most recent visible message.
+---@param id integer|string|nil Replace a visible message with this id.
+local function update_notification(chunks, replace_last, append, id)
+	local index
+	if id ~= nil then
+		for i, message in ipairs(visible_messages) do
+			if message.id == id then
+				index = i
+				break
+			end
+		end
+	end
+	if index then
+		visible_messages[index] = { chunks = chunks, id = id, append = visible_messages[index].append }
+	elseif append and #visible_messages > 0 then
+		vim.list_extend(visible_messages[#visible_messages].chunks, chunks)
+	elseif replace_last and #visible_messages > 0 then
+		visible_messages[#visible_messages] = { chunks = chunks, id = id }
+	else
+		visible_messages[#visible_messages + 1] = { chunks = chunks, id = id, append = append }
+	end
+	render_notifications()
+end
+
+---@param chunks cmdline.Content Message chunks to route.
 ---@param level integer Notification severity.
 ---@param title string? Optional notification title.
-local function notify_message(chunks, level, title)
+---@param replace_last boolean? Replace the most recent visible message.
+---@param append boolean? Append chunks to the most recent visible message.
+---@param id integer|string|nil Replace a visible message with this id.
+local function notify_message(chunks, level, title, replace_last, append, id)
 	local text = table.concat(chunks_text(chunks), "\n")
 	if text ~= "" then
 		local source = type(vim.notify) == "function" and debug.getinfo(vim.notify, "S").source or ""
 		if source == "vim/_core/editor" or source == "@vim/_editor.lua" then
-			show_notification(chunks)
+			update_notification(chunks, replace_last, append, id)
 			return
 		end
 		forwarding_message = true
@@ -166,6 +212,7 @@ local function should_notify_message(kind)
 		"echo",
 		"echomsg",
 		"lua_print",
+		"progress",
 		"list_cmd",
 		"shell_out",
 		"shell_err",
@@ -198,28 +245,32 @@ function M.handle(event, ...)
 			return
 		end
 		local kind, chunks = args[1], args[2]
+		local replace_last, append, id = args[3], args[5], args[6]
 		-- shortcut: guards synchronous echo fallbacks; deferred echo providers need explicit routing.
 		if forwarding_message then
 			local scheduled_generation = generation
 			vim.schedule(function()
 				if scheduled_generation == generation and config.messages.enabled then
-					show_notification(chunks)
+					update_notification(chunks, replace_last, append, id)
 				end
 			end)
 			return true
 		end
-		if config.messages.view_search and config.cmdline.enabled and is_search_message(kind, chunks) then
+		if
+			(config.messages.view_search and config.cmdline.enabled and is_search_message(kind, chunks))
+			or should_notify_message(kind)
+		then
 			local scheduled_generation = generation
 			vim.schedule(function()
 				if scheduled_generation == generation and config.messages.enabled then
-					notify_message(chunks, kind == "emsg" and vim.log.levels.ERROR or vim.log.levels.WARN, "Search")
-				end
-			end)
-		elseif should_notify_message(kind) then
-			local scheduled_generation = generation
-			vim.schedule(function()
-				if scheduled_generation == generation and config.messages.enabled then
-					notify_message(chunks, message_level(kind), kind == "lua_print" and "Lua" or nil)
+					notify_message(
+						chunks,
+						message_level(kind),
+						kind == "lua_print" and "Lua" or nil,
+						replace_last,
+						append,
+						id
+					)
 				end
 			end)
 		end

@@ -304,7 +304,7 @@ drain()
 assert(#vim.api.nvim_list_wins() == baseline)
 
 local error_hl = vim.api.nvim_get_hl_id_by_name("ErrorMsg")
-assert(dispatch("msg_show", "emsg", { { 0, "first\nsecond", error_hl } }))
+assert(dispatch("msg_show", "emsg", { { 0, "first\nsecond", error_hl } }, false, true, false, 7))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline + 1)
 local notification_buf
@@ -324,6 +324,18 @@ local notification_marks = vim.api.nvim_buf_get_extmarks(
 	{ details = true }
 )
 assert(#notification_marks == 2 and notification_marks[1][4].hl_group == "ErrorMsg")
+assert(dispatch("msg_show", "echo", { { 0, "second" } }, false, true, false, 10))
+assert(dispatch("msg_show", "echo", { { 0, " tail" } }, false, true, true, 8))
+assert(dispatch("msg_show", "echo", { { 0, "replacement" } }, true, true, false, 9))
+assert(dispatch("msg_show", "progress", { { 0, "updated first" } }, false, false, false, 7))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if vim.api.nvim_win_get_config(win).relative ~= "" then
+		notification_buf = vim.api.nvim_win_get_buf(win)
+	end
+end
+local updated_lines = vim.api.nvim_buf_get_lines(notification_buf, 0, -1, false)
+assert(table.concat(updated_lines, "\n") == "updated first\nreplacement", vim.inspect(updated_lines))
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
