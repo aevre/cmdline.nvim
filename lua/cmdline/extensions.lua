@@ -1,12 +1,23 @@
 local M = {}
 
+---@param state cmdline.ExtensionState Command-line state supplied by UI2.
+---@return string Command text without its leading colon.
 local function command(state)
-	return table.concat(state.lines, " "):gsub("^%s*:", "")
+	local text = table.concat(state.lines, " "):gsub("^%s*:", "")
+	return text
 end
 
+---@param prompt string Prompt text to test.
+---@param patterns cmdline.Pattern One pattern or an ordered list of patterns.
+---@return boolean Whether any pattern matches.
 local function matches_prompt(prompt, patterns)
-	patterns = type(patterns) == "table" and patterns or { patterns }
-	for _, pattern in ipairs(patterns) do
+	local list
+	if type(patterns) == "string" then
+		list = { patterns }
+	else
+		list = patterns
+	end
+	for _, pattern in ipairs(list) do
 		if prompt:match(pattern) then
 			return true
 		end
@@ -14,6 +25,9 @@ local function matches_prompt(prompt, patterns)
 	return false
 end
 
+---@param extension cmdline.Extension User or built-in extension to evaluate.
+---@param state cmdline.ExtensionState Current command-line state.
+---@return cmdline.ExtensionResult Context selected by the extension, if any.
 local function resolve_extension(extension, state)
 	if type(extension) == "function" then
 		return extension(state)
@@ -62,6 +76,10 @@ M.builtin = {
 	end,
 }
 
+---@param config cmdline.ResolvedConfig Complete plugin configuration.
+---@param current cmdline.CommandlineState Current UI2 command-line state.
+---@param lines string[] Plain-text content corresponding to current chunks.
+---@return string First matching context, or the generic `cmdline` context.
 function M.resolve(config, current, lines)
 	local state = {
 		chunks = current.chunks,
@@ -74,13 +92,17 @@ function M.resolve(config, current, lines)
 	}
 	for _, extension in ipairs(config.cmdline.extensions or {}) do
 		local name = resolve_extension(extension, state)
-		if name then
-			return type(name) == "table" and name.name or name
+		if type(name) == "table" then
+			return name.name
+		elseif name then
+			return name
 		end
 	end
 	for _, extension in ipairs(M.builtin) do
 		local name = resolve_extension(extension, state)
-		if name then
+		if type(name) == "table" then
+			return name.name
+		elseif name then
 			return name
 		end
 	end

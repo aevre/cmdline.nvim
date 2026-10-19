@@ -11,7 +11,7 @@ A small Neovim 0.12+ command-line UI built on native UI2 and `vim.ui_attach()`.
 - Floating rendering for `:`, `/`, `?`, `input()`, expression input, debug input, and command-specific prompts.
 - Separate layouts for command lines, searches, file prompts, rename prompts, and user-defined contexts.
 - Native UI2 popupmenu support with Blink and nvim-cmp coexistence.
-- Message routing through `notify.nvim`, including error and warning levels.
+- Message routing through `vim.notify()`, with a built-in fallback when no notification plugin is installed.
 - Scrollable `:messages` and `g<` history window.
 - Configurable borders, titles, icons, positions, and highlight groups.
 - Extension points for classifying new command lines and prompts without changing plugin code.
@@ -124,7 +124,7 @@ vim.opt.guicursor = {
 - `view_history`: name of the history view. The built-in `messages` view is a scrollable floating window.
 - `view_search`: set to `false` to disable search-result notification routing.
 
-Errors and warnings retain their log levels. Search messages use the `Search` notification title. Notification history remains owned by `notify.nvim`.
+Errors and warnings retain their log levels. Search messages use the `Search` notification title. External notification providers retain their own history.
 
 ### `popupmenu`
 
@@ -251,7 +251,9 @@ Configure the links with `cmdline.opts.highlights`. Icon priority is format `ico
 
 ## Messages and history
 
-Ordinary UI2 output, Lua output, shell output, errors, and warnings are routed through public `vim.notify()`, so the configured notification renderer and history remain in control.
+Ordinary UI2 output, Lua output, shell output, errors, and warnings are routed through public `vim.notify()` when a custom provider is installed. With Neovim's default provider, messages appear for four seconds in a borderless, full-width window at the bottom left, using Neovim's `MsgArea` highlight and preserving message highlights, avoiding a loop through `nvim_echo()`. The latest message replaces the previous one; long messages are capped at half the screen height. Messages recorded by Neovim remain available in `:messages`.
+
+The routing guard handles providers that synchronously echo a notification back through UI2. A provider that writes it back asynchronously with `nvim_echo()` cannot be reliably distinguished from a new message and may cause duplicate routing; providers that render their own notifications without writing back are unaffected.
 
 `:messages` and `g<` open a dedicated scrollable `Messages` floating window. Press `q` or `<Esc>` to close it and restore the previous window. The public API is:
 
@@ -288,4 +290,17 @@ Run the complete local check from the repository root:
 make check
 ```
 
-This runs Stylua formatting checks, Selene, and the headless smoke test.
+This runs Stylua formatting checks (including tests), Selene, and headless smoke and lifecycle tests. The lifecycle test captures UI dispatch to check repeated setup, scheduled rendering, popup placement, and resource cleanup; it does not replace terminal testing.
+
+The public entry is `require("cmdline")`, exposing `setup(opts)` and `close_history()`. Other modules are internal:
+
+- `init.lua`: configuration assembly, UI attachment, event dispatch, and autocmd registration.
+- `commandline.lua`: command-line state, layouts, cursor rendering, resize handling, and cmp coordinate integration.
+- `popupmenu.lua`: native completion menu state and rendering; obtains its anchor from `commandline.lua`.
+- `messages.lua`: message routing, native notification fallback, history windows, and timer cleanup.
+- `ui.lua`: shared window cleanup, buffer writes, and chunk-to-text conversion.
+- `config.lua`: configuration types, defaults, and merging.
+- `extensions.lua`: command and prompt context resolution.
+- `highlights.lua`: internal highlight links.
+
+Feature modules own their resources and receive configuration from `setup()`. They depend on `ui.lua`; command-line rendering also uses `extensions.lua`. No feature module requires the public entry. Requiring the plugin does not attach UI surfaces or create windows; repeated `setup()` reuses the attachment and replaces the autocmd group.

@@ -22,4 +22,67 @@ assert(extensions.resolve(config, { firstc = ":", chunks = {}, prompt = "" }, { 
 assert(extensions.resolve(config, { firstc = ":", chunks = {}, prompt = "" }, { ":lua print(1)" }) == "lua")
 assert(extensions.resolve(config, { firstc = "", chunks = {}, prompt = "File already open: " }, { "" }) == "file")
 assert(extensions.resolve(config, { firstc = "", chunks = {}, prompt = "Enter value: " }, { "" }) == "input")
+local native_notify = vim.notify
+cmdline.setup()
+local function visible(text)
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if vim.api.nvim_win_get_config(win).relative ~= "" then
+			local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+			if table.concat(lines, "\n"):find(text, 1, true) then
+				return true
+			end
+		end
+	end
+	return false
+end
+vim.notify("native notification")
+assert(vim.wait(500, function()
+	return visible("native notification")
+end))
+assert(vim.notify == native_notify)
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local opts = vim.api.nvim_win_get_config(win)
+	if opts.relative == "editor" then
+		assert(opts.col == 0 and opts.width == vim.o.columns)
+		assert(opts.row == vim.o.lines - vim.o.cmdheight - opts.height)
+		assert(opts.border == nil or opts.border == "none")
+		assert(not opts.focusable and opts.title == nil)
+		assert(vim.wo[win].winhighlight == "Normal:MsgArea,EndOfBuffer:MsgArea")
+	end
+end
+vim.cmd.messages()
+assert(vim.wait(500, function()
+	return vim.api.nvim_win_get_config(0).relative ~= ""
+end))
+assert(visible("native notification"))
+cmdline.close_history()
+assert(vim.api.nvim_win_get_config(0).relative == "")
+
+local received = {}
+vim.notify = function(text, level, opts)
+	received[#received + 1] = { text, level, opts.title }
+end
+for _, item in ipairs({
+	{ "echo", vim.log.levels.INFO },
+	{ "emsg", vim.log.levels.ERROR },
+	{ "wmsg", vim.log.levels.WARN },
+	{ "search_count", vim.log.levels.WARN },
+}) do
+	vim.api.nvim_echo({ { item[1] } }, false, { kind = item[1] })
+	assert(vim.wait(500, function()
+		return #received > 0
+	end))
+	local notification = table.remove(received, 1)
+	assert(notification[1] == item[1] and notification[2] == item[2])
+	assert(notification[3] == (item[1] == "search_count" and "Search" or "Messages"))
+end
+vim.notify = function(text, level)
+	native_notify(text, level)
+end
+vim.cmd('echo "wrapped notification"')
+assert(vim.wait(500, function()
+	return visible("wrapped notification")
+end))
+vim.notify = native_notify
+vim.ui_detach(vim.api.nvim_create_namespace("cmdline.nvim"))
 print("cmdline.nvim smoke: ok")

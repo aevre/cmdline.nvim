@@ -11,7 +11,7 @@
 - 为 `:`、`/`、`?`、`input()`、表达式、debug 和命令专用提示提供浮动渲染。
 - 为命令行、搜索、文件提示、重命名提示和用户自定义 context 提供独立布局。
 - 支持原生 UI2 popupmenu，并与 Blink、nvim-cmp 共存。
-- 通过 `notify.nvim` 路由消息，同时保留错误和警告级别。
+- 通过 `vim.notify()` 路由消息，未安装通知插件时使用内置浮窗。
 - 提供可滚动的 `:messages` 和 `g<` 历史窗口。
 - 可配置边框、标题、图标、位置和高亮组。
 - 支持扩展命令行和 prompt 分类，无需修改插件代码。
@@ -124,7 +124,7 @@ vim.opt.guicursor = {
 - `view_history`：历史视图名称。内置的 `messages` 视图是可滚动浮动窗口。
 - `view_search`：设为 `false` 可关闭搜索结果通知路由。
 
-错误和警告保留对应日志级别。搜索消息使用 `Search` 通知标题。通知历史仍由 `notify.nvim` 负责。
+错误和警告保留对应日志级别。搜索消息使用 `Search` 通知标题。外部通知 provider 继续管理自己的通知历史。
 
 ### `popupmenu`
 
@@ -251,7 +251,9 @@ Lua 和 help 视图会隐藏命令前缀，并补偿光标位置。将某个 for
 
 ## 消息和历史
 
-普通 UI2 输出、Lua 输出、shell 输出、错误和警告都会通过公开的 `vim.notify()` 路由，因此通知渲染器和历史仍由现有配置负责。
+安装自定义通知 provider 时，普通 UI2 输出、Lua 输出、shell 输出、错误和警告通过公开的 `vim.notify()` 路由。使用 Neovim 默认 provider 时，消息在左下角的无边框、全宽临时窗口中显示四秒，使用 Neovim 的 `MsgArea` 高亮并保留消息自身的高亮，避免通过 `nvim_echo()` 形成回路。新消息替换上一条消息；长消息最多占半屏高度。Neovim 已记录的消息仍可通过 `:messages` 查看。
+
+路由保护可处理同步通过 UI2 回写通知的 provider。若 provider 稍后通过 `nvim_echo()` 回写，插件无法可靠判断这是原通知的回声还是新消息，可能导致重复路由；只显示自身通知、不回写消息的 provider 不受此限制。
 
 `:messages` 和 `g<` 会打开独立的可滚动 `Messages` 浮动窗口。按 `q` 或 `<Esc>` 关闭，并恢复之前的窗口。公开 API 是：
 
@@ -288,4 +290,17 @@ require("vim._core.ui2").enable({ enable = true })
 make check
 ```
 
-该命令会执行 Stylua 格式检查、Selene 静态检查和 headless smoke test。
+该命令会执行 Stylua 格式检查（包含测试文件）、Selene 静态检查及 headless smoke 和生命周期测试。生命周期测试捕获 UI 事件分发，验证重复 setup、延迟渲染、菜单定位和资源清理；它不能替代终端测试。
+
+公共入口为 `require("cmdline")`，导出 `setup(opts)` 和 `close_history()`。其余模块属于内部实现：
+
+- `init.lua`：配置装配、UI 挂载、事件分发和 autocmd 注册。
+- `commandline.lua`：命令行状态、布局、光标渲染、尺寸调整及 cmp 坐标适配。
+- `popupmenu.lua`：原生补全菜单状态和渲染；通过 `commandline.lua` 获取定位锚点。
+- `messages.lua`：消息路由、原生通知回退、历史窗口和定时器清理。
+- `ui.lua`：共享的窗口清理、buffer 写入和消息块文本转换。
+- `config.lua`：配置类型、默认值和合并。
+- `extensions.lua`：命令和 prompt 的 context 解析。
+- `highlights.lua`：内部高亮链接。
+
+功能模块管理各自的资源，由 `setup()` 传入配置；它们依赖 `ui.lua`，命令行渲染另依赖 `extensions.lua`。功能模块不反向 require 公共入口。require 插件不会挂载 UI 或创建窗口；重复 `setup()` 复用已有挂载并替换 autocmd group。
