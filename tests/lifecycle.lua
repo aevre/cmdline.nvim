@@ -341,11 +341,22 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 	end
 end
 assert(cmd_win and vim.wo[cmd_win].virtualedit == "onemore")
+local popup_config = require("cmdline.config").merge({ popupmenu = { kind_icons = { Function = "ƒ" } } })
+require("cmdline.popupmenu").configure(popup_config)
 local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(cmd_win), 0, -1, false)
 assert(lines[1]:find("print('中文')", 1, true) and not lines[1]:find("lua", 1, true))
-assert(dispatch("popupmenu_show", { { "one" }, { "two" } }, 0, 0, 0, -1))
+assert(dispatch("popupmenu_show", { { "one", "Function" }, { "two", "Unknown" } }, 0, 0, 0, -1))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline + 2)
+local kind_icon_lines, kind_icon_win
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if vim.api.nvim_win_get_config(win).zindex == 201 then
+		kind_icon_win = win
+		kind_icon_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	end
+end
+assert(kind_icon_lines and kind_icon_lines[1] == "> ƒ one" and kind_icon_lines[2] == "    two")
+assert(vim.api.nvim_win_get_width(kind_icon_win) >= vim.fn.strdisplaywidth("  ƒ one"))
 for _, win in ipairs(vim.api.nvim_list_wins()) do
 	local opts = vim.api.nvim_win_get_config(win)
 	if opts.relative == "win" then
@@ -354,6 +365,8 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 end
 assert(dispatch("popupmenu_select", 1))
 drain()
+local popup_without_icons = require("cmdline.config").merge({ popupmenu = { kind_icons = false } })
+require("cmdline.popupmenu").configure(popup_without_icons)
 local completion_items = {}
 for i = 1, 13 do
 	completion_items[i] = { "item" .. i }
@@ -374,6 +387,7 @@ assert(popup_lines and #popup_lines == 12 and popup_lines[1] == "  item2" and po
 assert(dispatch("cmdline_hide"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
+cmdline.setup()
 
 local error_hl = vim.api.nvim_get_hl_id_by_name("ErrorMsg")
 assert(dispatch("msg_show", "emsg", { { 0, "first\nsecond", error_hl } }, false, true, false, 7))
@@ -439,9 +453,14 @@ cmdline.setup({ messages = { enabled = false } })
 assert(not dispatch("msg_show", "echo", { { 0, "not consumed" } }, false, false, false, 13))
 cmdline.setup({ messages = { enabled = true } })
 local previous = vim.api.nvim_get_current_win()
-assert(dispatch("msg_history_show", { { "echo", { { 0, "history" } } } }))
+assert(dispatch("msg_history_show", {
+	{ "echo", { { 0, "old\nline" } }, false },
+	{ "echon", { { 0, " continued" } }, true },
+	{ "echo", { { 0, "new" } }, false },
+}))
 drain()
 local history_buf = vim.api.nvim_get_current_buf()
+assert(vim.deep_equal(vim.api.nvim_buf_get_lines(history_buf, 0, -1, false), { "new", "old", "line continued" }))
 local keys = vim.api.nvim_buf_get_keymap(history_buf, "n")
 local close
 for _, key in ipairs(keys) do

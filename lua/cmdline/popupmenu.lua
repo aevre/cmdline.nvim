@@ -8,6 +8,8 @@ local pum_items = {}
 local pum_selected = -1
 local pum_first = 1
 local pum_height = 0
+local pum_icon_width = 0
+local pum_show_icons = false
 
 local function redraw_pum()
 	if not valid_win(pum_win) then
@@ -17,17 +19,23 @@ local function redraw_pum()
 		pum_first = math.max(1, math.min(pum_selected + 1, #pum_items - pum_height + 1))
 	end
 	local lines = {}
+	local icons = config.popupmenu.kind_icons
 	for i = pum_first, math.min(#pum_items, pum_first + pum_height - 1) do
 		local item = pum_items[i]
 		local label = item.word or item[1] or ""
-		lines[#lines + 1] = (i == pum_selected + 1 and "> " or "  ") .. label
+		local icon = type(icons) == "table" and icons[item.kind or item[2]] or nil
+		local prefix = i == pum_selected + 1 and "> " or "  "
+		if pum_show_icons then
+			prefix = prefix .. (icon or "") .. string.rep(" ", pum_icon_width - vim.fn.strdisplaywidth(icon or "") + 1)
+		end
+		lines[#lines + 1] = prefix .. label
 	end
 	set_lines(pum_buf, lines)
 end
 
 local function close_pum()
 	pum_win, pum_buf = close(pum_win, pum_buf)
-	pum_items, pum_selected, pum_first, pum_height = {}, -1, 1, 0
+	pum_items, pum_selected, pum_first, pum_height, pum_icon_width, pum_show_icons = {}, -1, 1, 0, 0, false
 end
 
 local function external_completion_menu()
@@ -50,6 +58,13 @@ local function open_pum(items, selected, row, col, grid)
 		return
 	end
 	pum_items, pum_selected = items, selected
+	pum_icon_width = 0
+	pum_show_icons = type(config.popupmenu.kind_icons) == "table" and next(config.popupmenu.kind_icons) ~= nil
+	if pum_show_icons then
+		for _, icon in pairs(config.popupmenu.kind_icons) do
+			pum_icon_width = math.max(pum_icon_width, vim.fn.strdisplaywidth(icon))
+		end
+	end
 	pum_buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_set_option_value("buftype", "nofile", { buf = pum_buf })
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = pum_buf })
@@ -58,7 +73,10 @@ local function open_pum(items, selected, row, col, grid)
 	pum_height = height
 	local width = 1
 	for _, item in ipairs(items) do
-		width = math.max(width, vim.fn.strdisplaywidth(item.word or item[1] or "") + 2)
+		width = math.max(
+			width,
+			vim.fn.strdisplaywidth(item.word or item[1] or "") + 2 + (pum_show_icons and pum_icon_width + 1 or 0)
+		)
 	end
 	local opts = {
 		relative = "editor",

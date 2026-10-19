@@ -19,13 +19,22 @@ end
 ---@param entries cmdline.HistoryEntry[] UI2 message history entries.
 local function show_history(entries)
 	close_history()
-	local lines = {}
-	for index, entry in ipairs(entries) do
+	local messages = {}
+	for _, entry in ipairs(entries) do
 		local entry_lines = chunks_text(entry[2] or {})
-		if index > 1 and not entry[3] then
-			lines[#lines + 1] = ""
+		if entry[3] and #messages > 0 then
+			local previous = messages[#messages]
+			previous[#previous] = previous[#previous] .. entry_lines[1]
+			for index = 2, #entry_lines do
+				previous[#previous + 1] = entry_lines[index]
+			end
+		elseif #entry_lines > 1 or entry_lines[1] ~= "" then
+			messages[#messages + 1] = entry_lines
 		end
-		vim.list_extend(lines, entry_lines)
+	end
+	local lines = {}
+	for index = #messages, 1, -1 do
+		vim.list_extend(lines, messages[index])
 	end
 	if #lines == 0 then
 		return

@@ -86,10 +86,6 @@
 
 ---@class cmdline.MessagesConfig Message routing and history configuration.
 ---@field enabled? boolean Whether message routing and history are active.
----@field view? string Default destination name retained for configuration compatibility.
----@field view_error? string Destination name retained for configuration compatibility.
----@field view_warn? string Destination name retained for configuration compatibility.
----@field view_history? string History view name retained for configuration compatibility.
 ---@field view_search? string|false Enable or disable search-result routing.
 ---@field search_count? cmdline.SearchCount Search-count formatting, placement, and highlight.
 
@@ -103,7 +99,7 @@
 ---@class cmdline.PopupmenuConfig Configuration for the completion popup renderer.
 ---@field enabled? boolean Whether popupmenu rendering is active.
 ---@field backend? cmdline.PopupBackend Renderer that owns command-line completions.
----@field kind_icons? table<string, string>|string|false Completion-kind icon mapping retained for compatibility.
+---@field kind_icons? table<string, string>|false Icons keyed by completion kind, or `false` to disable icons.
 
 ---@class cmdline.Config User-facing grouped plugin configuration.
 ---@field cmdline? cmdline.CmdlineConfig Command-line rendering and context configuration.
@@ -131,17 +127,13 @@
 
 ---@class cmdline.ResolvedMessagesConfig Complete message settings after merging defaults.
 ---@field enabled boolean Whether message routing and history are active.
----@field view string Default destination name retained for compatibility.
----@field view_error string Error destination name retained for compatibility.
----@field view_warn string Warning destination name retained for compatibility.
----@field view_history string History view name retained for compatibility.
 ---@field view_search string|false Enable or disable search-result routing.
 ---@field search_count cmdline.SearchCountResolved Resolved search-count display settings.
 
 ---@class cmdline.ResolvedPopupmenuConfig Complete popupmenu settings after merging defaults.
 ---@field enabled boolean Whether popupmenu rendering is active.
 ---@field backend cmdline.PopupBackend Renderer that owns command-line completions.
----@field kind_icons table<string, string>|string|false Completion-kind icon mapping retained for compatibility.
+---@field kind_icons table<string, string>|false Icons keyed by completion kind, or `false` to disable icons.
 
 ---@class cmdline.ResolvedConfig Complete plugin configuration after merging defaults.
 ---@field cmdline cmdline.ResolvedCmdlineConfig Complete merged command-line settings.
@@ -211,10 +203,6 @@ M.defaults = {
 	},
 	messages = {
 		enabled = true,
-		view = "notify",
-		view_error = "notify",
-		view_warn = "notify",
-		view_history = "messages",
 		view_search = "notify",
 		search_count = {
 			format = "[{current}/{total}]",
@@ -226,7 +214,29 @@ M.defaults = {
 	popupmenu = {
 		enabled = true,
 		backend = "nui",
-		kind_icons = {},
+		kind_icons = {
+			Class = "󰠱",
+			Color = "󰏘",
+			Constant = "󰏿",
+			Constructor = "",
+			Enum = "",
+			EnumMember = "",
+			Field = "󰜢",
+			File = "󰈙",
+			Folder = "󰉋",
+			Function = "ƒ",
+			Interface = "",
+			Keyword = "󰌋",
+			Method = "󰆧",
+			Module = "󰏗",
+			Property = "󰜢",
+			Snippet = "󰩫",
+			Struct = "󰙅",
+			Text = "󰉿",
+			Unit = "󰑭",
+			Value = "󰎠",
+			Variable = "󰀫",
+		},
 	},
 }
 

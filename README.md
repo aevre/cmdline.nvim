@@ -80,16 +80,15 @@ require("cmdline").setup({
   },
   messages = {
     enabled = true,
-    view = "notify",
-    view_error = "notify",
-    view_warn = "notify",
-    view_history = "messages",
     view_search = "notify",
   },
   popupmenu = {
     enabled = true,
     backend = "nui",
-    kind_icons = {},
+    kind_icons = {
+      Function = "ƒ",
+      Variable = "󰀫",
+    },
   },
 })
 ```
@@ -120,9 +119,9 @@ vim.opt.guicursor = {
 ### `messages`
 
 - `enabled`: enable UI2 message handling.
-- `view`, `view_error`, and `view_warn`: destination names kept for configuration compatibility; ordinary messages are currently sent through `vim.notify()`.
-- `view_history`: name of the history view. The built-in `messages` view is a scrollable floating window.
 - `view_search`: set to `false` to disable search-result routing.
+
+Ordinary messages are sent through `vim.notify()` with error and warning levels preserved. `:messages` and `g<` use the built-in scrollable history window. These destinations are fixed; there are no `view`, `view_error`, `view_warn`, or `view_history` options.
 
 Errors and warnings retain their log levels. Search counts are virtual text, not notifications. Configure their format, placement, and highlights with `messages.search_count`:
 
@@ -143,7 +142,7 @@ The default count uses Neovim's compact `[current/total]` style, as in Noice. Th
 
 - `enabled`: enable popupmenu handling.
 - `backend`: use `"nui"` for the built-in fallback window or `"cmp"` when an external completion backend should own the menu.
-- `kind_icons`: reserved for completion kind icons; set it to `false` to disable them.
+- `kind_icons`: defaults to a built-in completion-kind icon map. Override entries with a table, use an empty table to hide icons, or set it to `false` to disable them. Kinds missing from the map get a blank aligned slot.
 
 When Blink or nvim-cmp is loaded in command-line mode, `cmdline.nvim` does not draw a duplicate popupmenu. The completion plugin owns its menu while `cmdline.nvim` supplies the floating command-line position.
 
@@ -297,7 +296,7 @@ Ordinary UI2 output, Lua output, shell output, errors, and warnings are routed t
 
 Search-count virtual text is anchored beside the selected match in the current buffer. The routing guard handles providers that synchronously echo a notification back through UI2. A provider that writes it back asynchronously with `nvim_echo()` cannot be reliably distinguished from a new message and may cause duplicate routing; providers that render their own notifications without writing back are unaffected.
 
-`:messages` and `g<` open a dedicated scrollable `Messages` floating window. Press `q` or `<Esc>` to close it and restore the previous window. The public API is:
+`:messages` and `g<` open a dedicated scrollable `Messages` floating window. Messages appear newest first, without blank separator lines; multiline messages and `echon` continuations retain their content. Press `q` or `<Esc>` to close it and restore the previous window. The public API is:
 
 ```lua
 require("cmdline").close_history()

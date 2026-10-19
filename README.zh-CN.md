@@ -80,16 +80,15 @@ require("cmdline").setup({
   },
   messages = {
     enabled = true,
-    view = "notify",
-    view_error = "notify",
-    view_warn = "notify",
-    view_history = "messages",
     view_search = "notify",
   },
   popupmenu = {
     enabled = true,
     backend = "nui",
-    kind_icons = {},
+    kind_icons = {
+      Function = "ƒ",
+      Variable = "󰀫",
+    },
   },
 })
 ```
@@ -120,9 +119,9 @@ vim.opt.guicursor = {
 ### `messages`
 
 - `enabled`：启用 UI2 消息处理。
-- `view`、`view_error` 和 `view_warn`：保留用于配置消息目标名称；当前普通消息通过 `vim.notify()` 发送。
-- `view_history`：历史视图名称。内置的 `messages` 视图是可滚动浮动窗口。
 - `view_search`：设为 `false` 可关闭搜索结果路由。
+
+普通消息通过 `vim.notify()` 发送，并保留错误和警告级别。`:messages` 和 `g<` 固定使用内置可滚动历史窗口。目标目前固定，没有 `view`、`view_error`、`view_warn` 或 `view_history` 配置项。
 
 错误和警告保留对应日志级别。搜索数量以虚拟文字显示，不作为通知发送。可通过 `messages.search_count` 配置格式、位置和高亮：
 
@@ -143,7 +142,7 @@ messages = {
 
 - `enabled`：启用 popupmenu 处理。
 - `backend`：使用 `"nui"` 启用内置备用窗口，使用 `"cmp"` 时交给外部补全后端。
-- `kind_icons`：预留给补全项目类型图标；设为 `false` 可禁用。
+- `kind_icons`：默认使用内置的补全类型图标映射。可用表覆盖映射项，空表隐藏图标，设为 `false` 可显式禁用。未映射的类型保留对齐空位。
 
 当 Blink 或 nvim-cmp 在命令行模式中加载时，`cmdline.nvim` 不会绘制重复的 popupmenu。补全插件负责菜单，`cmdline.nvim` 提供浮动命令行位置。
 
@@ -297,7 +296,7 @@ Lua 和 help 视图会隐藏命令前缀，并补偿光标位置。将某个 for
 
 搜索数量以虚拟文字显示在当前缓冲区的选中结果旁。路由保护可处理同步通过 UI2 回写通知的 provider。若 provider 稍后通过 `nvim_echo()` 回写，插件无法可靠判断这是原通知的回声还是新消息，可能导致重复路由；只显示自身通知、不回写消息的 provider 不受此限制。
 
-`:messages` 和 `g<` 会打开独立的可滚动 `Messages` 浮动窗口。按 `q` 或 `<Esc>` 关闭，并恢复之前的窗口。公开 API 是：
+`:messages` 和 `g<` 会打开独立的可滚动 `Messages` 浮动窗口。消息按时间倒序显示，最新消息在顶部，消息之间不插入空行；多行内容和 `echon` 连续输出会保留。按 `q` 或 `<Esc>` 关闭，并恢复之前的窗口。公开 API 是：
 
 ```lua
 require("cmdline").close_history()
