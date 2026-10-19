@@ -173,9 +173,27 @@ assert(dispatch("cmdline_hide"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
 
-assert(dispatch("msg_show", "echo", { { 0, "first\nsecond" } }))
+local error_hl = vim.api.nvim_get_hl_id_by_name("ErrorMsg")
+assert(dispatch("msg_show", "emsg", { { 0, "first\nsecond", error_hl } }))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline + 1)
+local notification_buf
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local buf = vim.api.nvim_win_get_buf(win)
+	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+	if table.concat(lines, "\n") == "first\nsecond" then
+		notification_buf = buf
+	end
+end
+assert(notification_buf)
+local notification_marks = vim.api.nvim_buf_get_extmarks(
+	notification_buf,
+	vim.api.nvim_get_namespaces()["cmdline.messages"],
+	0,
+	-1,
+	{ details = true }
+)
+assert(#notification_marks == 2 and notification_marks[1][4].hl_group == "ErrorMsg")
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)

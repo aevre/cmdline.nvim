@@ -66,6 +66,7 @@ end
 
 local notification_buf, notification_win
 local notification_timer
+local notification_ns = vim.api.nvim_create_namespace("cmdline.messages")
 
 local function clear_notification()
 	if notification_timer then
@@ -112,7 +113,7 @@ local function show_notification(chunks)
 				row, col = row + 1, 0
 			end
 			if chunk[3] and chunk[3] > 0 and #part > 0 then
-				vim.api.nvim_buf_set_extmark(notification_buf, -1, row, col, {
+				vim.api.nvim_buf_set_extmark(notification_buf, notification_ns, row, col, {
 					end_col = col + #part,
 					hl_group = chunk[3],
 				})
