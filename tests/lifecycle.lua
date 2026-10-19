@@ -162,12 +162,49 @@ drain()
 assert(
 	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
 )
+vim.api.nvim_win_set_cursor(0, { 1, 8 })
+require("cmdline.commandline").refresh_search_count()
+drain()
+marks = vim.api.nvim_buf_get_extmarks(
+	source_buf,
+	vim.api.nvim_get_namespaces()["cmdline.search_count"],
+	0,
+	-1,
+	{ details = true }
+)
+assert(#marks == 1 and marks[1][2] == 0, vim.inspect(marks))
+vim.api.nvim_win_set_cursor(0, { 1, 12 })
+require("cmdline.commandline").refresh_search_count()
+drain()
+marks = vim.api.nvim_buf_get_extmarks(
+	source_buf,
+	vim.api.nvim_get_namespaces()["cmdline.search_count"],
+	0,
+	-1,
+	{ details = true }
+)
+assert(#marks == 1 and marks[1][2] == 0)
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 require("cmdline.commandline").refresh_search_count()
 drain()
 assert(
 	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 1
 )
+vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { "foo bar foo baz foo" })
+vim.fn.setreg("/", "foo")
+for _, col in ipairs({ 8, 16 }) do
+	vim.api.nvim_win_set_cursor(0, { 1, col })
+	require("cmdline.commandline").refresh_search_count()
+	drain()
+	marks = vim.api.nvim_buf_get_extmarks(
+		source_buf,
+		vim.api.nvim_get_namespaces()["cmdline.search_count"],
+		0,
+		-1,
+		{ details = true }
+	)
+	assert(#marks == 1 and marks[1][2] == 0)
+end
 local edge_col = vim.api.nvim_win_get_width(0) - 4
 vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { string.rep("x", edge_col) .. "foo" })
 vim.fn.setreg("/", "foo")
