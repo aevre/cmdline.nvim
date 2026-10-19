@@ -411,6 +411,33 @@ assert(table.concat(updated_lines, "\n") == "updated first\nreplacement", vim.in
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
+assert(dispatch("msg_show", "confirm", { { 0, "Save changes?" } }, false, false, false, 11))
+drain()
+local confirm_win
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if vim.api.nvim_win_get_config(win).relative ~= "" then
+		confirm_win = win
+	end
+end
+assert(confirm_win)
+local confirm_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(confirm_win), 0, -1, false)
+assert(table.concat(confirm_lines, "\n"):find("Save changes?", 1, true))
+assert(dispatch("msg_clear"))
+drain()
+assert(#vim.api.nvim_list_wins() == baseline)
+assert(dispatch("msg_show", "future_kind", { { 0, "unknown message" } }, false, false, false, 12))
+drain()
+local unknown_visible = false
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	unknown_visible = unknown_visible or table.concat(lines, "\n"):find("unknown message", 1, true) ~= nil
+end
+assert(unknown_visible)
+assert(dispatch("msg_clear"))
+drain()
+cmdline.setup({ messages = { enabled = false } })
+assert(not dispatch("msg_show", "echo", { { 0, "not consumed" } }, false, false, false, 13))
+cmdline.setup({ messages = { enabled = true } })
 local previous = vim.api.nvim_get_current_win()
 assert(dispatch("msg_history_show", { { "echo", { { 0, "history" } } } }))
 drain()

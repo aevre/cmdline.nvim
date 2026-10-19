@@ -68,6 +68,7 @@ local notification_buf, notification_win
 local notification_timer
 local notification_ns = vim.api.nvim_create_namespace("cmdline.messages")
 local visible_messages = {}
+local persistent_notification = false
 local generation = 0
 
 local function clear_notification()
@@ -78,6 +79,7 @@ local function clear_notification()
 	end
 	notification_win, notification_buf = close(notification_win, notification_buf)
 	visible_messages = {}
+	persistent_notification = false
 end
 
 ---@param chunks cmdline.Content Message chunks including highlight ids.
@@ -139,10 +141,12 @@ local function render_notifications()
 			col = col + #part
 		end
 	end
-	notification_timer = vim.defer_fn(function()
-		notification_timer = nil
-		clear_notification()
-	end, 4000)
+	if not persistent_notification then
+		notification_timer = vim.defer_fn(function()
+			notification_timer = nil
+			clear_notification()
+		end, 4000)
+	end
 end
 
 local forwarding_message = false
@@ -151,7 +155,8 @@ local forwarding_message = false
 ---@param replace_last boolean? Replace the most recent visible message.
 ---@param append boolean? Append chunks to the most recent visible message.
 ---@param id integer|string|nil Replace a visible message with this id.
-local function update_notification(chunks, replace_last, append, id)
+local function update_notification(chunks, replace_last, append, id, persistent)
+	persistent_notification = persistent or false
 	local index
 	if id ~= nil then
 		for i, message in ipairs(visible_messages) do
@@ -222,6 +227,13 @@ local function should_notify_message(kind)
 		"lua_error",
 		"rpc_error",
 		"wmsg",
+		"completion",
+		"quickfix",
+		"search_cmd",
+		"shell_cmd",
+		"undo",
+		"verbose",
+		"wildlist",
 	}, kind)
 end
 
@@ -246,6 +258,12 @@ function M.handle(event, ...)
 		end
 		local kind, chunks = args[1], args[2]
 		local replace_last, append, id = args[3], args[5], args[6]
+		if kind ~= "search_count" and kind ~= "confirm" and not should_notify_message(kind) then
+			kind = ""
+		end
+		if kind == "search_count" then
+			return
+		end
 		-- shortcut: guards synchronous echo fallbacks; deferred echo providers need explicit routing.
 		if forwarding_message then
 			local scheduled_generation = generation
@@ -256,8 +274,18 @@ function M.handle(event, ...)
 			end)
 			return true
 		end
+		if kind == "confirm" then
+			local scheduled_generation = generation
+			vim.schedule(function()
+				if scheduled_generation == generation and config.messages.enabled then
+					update_notification(chunks, replace_last, append, id, true)
+				end
+			end)
+			return true
+		end
 		if
 			(config.messages.view_search and config.cmdline.enabled and is_search_message(kind, chunks))
+			or kind == ""
 			or should_notify_message(kind)
 		then
 			local scheduled_generation = generation
@@ -273,8 +301,8 @@ function M.handle(event, ...)
 					)
 				end
 			end)
+			return true
 		end
-		return true
 	elseif event == "msg_history_show" then
 		if not config.messages.enabled then
 			return
