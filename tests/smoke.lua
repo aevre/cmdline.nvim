@@ -19,6 +19,8 @@ local config = require("cmdline.config").merge({
 })
 assert(extensions.resolve(config, { firstc = ":", chunks = {}, prompt = "" }, { "Git status" }) == "git")
 assert(extensions.resolve(config, { firstc = ":", chunks = {}, prompt = "" }, { ":help foo" }) == "help")
+assert(extensions.resolve(config, { firstc = ":", chunks = {}, prompt = "" }, { "lua" }) == "cmdline")
+assert(extensions.resolve(config, { firstc = ":", chunks = {}, prompt = "" }, { "lua " }) == "lua")
 assert(extensions.resolve(config, { firstc = ":", chunks = {}, prompt = "" }, { ":lua print(1)" }) == "lua")
 assert(extensions.resolve(config, { firstc = "", chunks = {}, prompt = "File already open: " }, { "" }) == "file")
 assert(extensions.resolve(config, { firstc = "", chunks = {}, prompt = "Enter value: " }, { "" }) == "input")
