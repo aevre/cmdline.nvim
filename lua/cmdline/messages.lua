@@ -67,6 +67,7 @@ end
 local notification_buf, notification_win
 local notification_timer
 local notification_ns = vim.api.nvim_create_namespace("cmdline.messages")
+local generation = 0
 
 local function clear_notification()
 	if notification_timer then
@@ -199,18 +200,27 @@ function M.handle(event, ...)
 		local kind, chunks = args[1], args[2]
 		-- shortcut: guards synchronous echo fallbacks; deferred echo providers need explicit routing.
 		if forwarding_message then
+			local scheduled_generation = generation
 			vim.schedule(function()
-				show_notification(chunks)
+				if scheduled_generation == generation and config.messages.enabled then
+					show_notification(chunks)
+				end
 			end)
 			return true
 		end
 		if config.messages.view_search and config.cmdline.enabled and is_search_message(kind, chunks) then
+			local scheduled_generation = generation
 			vim.schedule(function()
-				notify_message(chunks, kind == "emsg" and vim.log.levels.ERROR or vim.log.levels.WARN, "Search")
+				if scheduled_generation == generation and config.messages.enabled then
+					notify_message(chunks, kind == "emsg" and vim.log.levels.ERROR or vim.log.levels.WARN, "Search")
+				end
 			end)
 		elseif should_notify_message(kind) then
+			local scheduled_generation = generation
 			vim.schedule(function()
-				notify_message(chunks, message_level(kind), kind == "lua_print" and "Lua" or nil)
+				if scheduled_generation == generation and config.messages.enabled then
+					notify_message(chunks, message_level(kind), kind == "lua_print" and "Lua" or nil)
+				end
 			end)
 		end
 		return true
@@ -218,8 +228,11 @@ function M.handle(event, ...)
 		if not config.messages.enabled then
 			return
 		end
+		local scheduled_generation = generation
 		vim.schedule(function()
-			show_history(args[1] or {})
+			if scheduled_generation == generation and config.messages.enabled then
+				show_history(args[1] or {})
+			end
 		end)
 		return true
 	elseif event == "msg_clear" or event == "msg_history_clear" then
@@ -238,6 +251,12 @@ end
 ---@param opts cmdline.ResolvedConfig Complete merged plugin configuration.
 function M.configure(opts)
 	config = opts
+end
+
+function M.close()
+	generation = generation + 1
+	close_history()
+	clear_notification()
 end
 
 M.close_history = close_history

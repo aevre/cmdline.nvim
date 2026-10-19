@@ -15,6 +15,7 @@ local cmd_buf
 local cmd_win
 local cmp_patched = false
 local mini_cmdheight = false
+local original_cmdheight
 ---@type cmdline.CommandlineState
 local current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
 local cmdline_generation = 0
@@ -254,7 +255,8 @@ end
 ---@return nil
 local function restore_cmdheight()
 	if mini_cmdheight then
-		vim.o.cmdheight = 0
+		vim.o.cmdheight = original_cmdheight or 0
+		original_cmdheight = nil
 		mini_cmdheight = false
 	end
 end
@@ -317,6 +319,7 @@ function M.handle(event, ...)
 		current.chunks, current.pos, current.firstc = args[1], args[2], args[3]
 		current.prompt, current.indent, current.level = args[4], args[5], args[6] or 0
 		if active_view().position == "mini" and not mini_cmdheight then
+			original_cmdheight = vim.o.cmdheight
 			vim.o.cmdheight = 1
 			mini_cmdheight = true
 		end
@@ -504,6 +507,27 @@ end
 function M.configure(opts, namespace)
 	config, ns = opts, namespace
 	search_ns = vim.api.nvim_create_namespace("cmdline.search_count")
+end
+
+function M.teardown()
+	cmdline_generation = cmdline_generation + 1
+	search_abort_generation = search_abort_generation + 1
+	search_aborted = false
+	search_watch_pending = false
+	search_chunks = nil
+	search_generation = search_generation + 1
+	if search_buf and vim.api.nvim_buf_is_valid(search_buf) then
+		vim.api.nvim_buf_clear_namespace(search_buf, search_ns, 0, -1)
+	end
+	search_buf = nil
+	cmd_win, cmd_buf = close(cmd_win, cmd_buf)
+	if mini_cmdheight then
+		vim.o.cmdheight = original_cmdheight or 0
+		mini_cmdheight = false
+		original_cmdheight = nil
+	end
+	vim.g.ui_cmdline_pos = nil
+	current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
 end
 
 ---@return nil

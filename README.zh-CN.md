@@ -274,6 +274,8 @@ Lua 和 help 视图会隐藏命令前缀，并补偿光标位置。将某个 for
 require("cmdline").close_history()
 ```
 
+调用 `require("cmdline").disable()` 会解除 UI2 挂载、清理资源，并恢复 setup 前保存的 `cmdheight`。在 `setup()` 中同时设置 `cmdline.enabled = false` 和 `messages.enabled = false` 也会执行相同清理。
+
 交互式确认 prompt 和 return prompt 保持原生行为，不会被路由到通知。
 
 ## UI2 所有权
@@ -305,7 +307,7 @@ make check
 
 该命令会执行 Stylua 格式检查（包含测试文件）、Selene 静态检查及 headless smoke 和生命周期测试。生命周期测试捕获 UI 事件分发，验证重复 setup、延迟渲染、菜单定位和资源清理；它不能替代终端测试。
 
-公共入口为 `require("cmdline")`，导出 `setup(opts)` 和 `close_history()`。其余模块属于内部实现：
+公共入口为 `require("cmdline")`，导出 `setup(opts)`、`disable()` 和 `close_history()`。其余模块属于内部实现：
 
 - `init.lua`：配置装配、UI 挂载、事件分发和 autocmd 注册。
 - `commandline.lua`：命令行状态、布局、光标渲染、尺寸调整及 cmp 坐标适配。

@@ -1,11 +1,15 @@
 vim.opt.runtimepath:prepend(vim.fn.getcwd())
 
-local original_attach = vim.ui_attach
-local attach_count, dispatch = 0
+local original_attach, original_detach = vim.ui_attach, vim.ui_detach
+local attach_count, detach_count, dispatch = 0, 0
 vim.ui_attach = function(_, _, callback)
 	attach_count = attach_count + 1
 	dispatch = callback
 end
+vim.ui_detach = function()
+	detach_count = detach_count + 1
+end
+vim.o.cmdheight = 2
 local baseline = #vim.api.nvim_list_wins()
 local cmdline = require("cmdline")
 assert(attach_count == 0 and #vim.api.nvim_list_wins() == baseline)
@@ -250,5 +254,21 @@ drain()
 assert(
 	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 1
 )
-vim.ui_attach = original_attach
+assert(dispatch("cmdline_show", { { 0, "search" } }, 6, "/", "", 0, 1))
+assert(dispatch("popupmenu_show", { { "one" }, { "two" } }, 0, 0, 0, -1))
+drain()
+assert(#vim.api.nvim_list_wins() == baseline + 2)
+assert(cmdline.setup({ cmdline = { enabled = false }, messages = { enabled = false } }) == cmdline)
+drain()
+assert(detach_count == 1 and vim.o.cmdheight == 2)
+assert(not pcall(vim.api.nvim_get_autocmds, { group = "cmdline.nvim" }))
+assert(#vim.api.nvim_list_wins() == baseline and vim.g.ui_cmdline_pos == nil)
+assert(
+	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
+)
+cmdline.setup()
+assert(attach_count == 2)
+cmdline.disable()
+assert(detach_count == 2 and vim.o.cmdheight == 2)
+vim.ui_attach, vim.ui_detach = original_attach, original_detach
 print("cmdline.nvim lifecycle: ok")

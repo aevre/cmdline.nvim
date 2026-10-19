@@ -159,6 +159,7 @@
 
 ---@class cmdline.Module Public interface returned by `require("cmdline")`.
 ---@field setup fun(opts?: cmdline.Config): cmdline.Module Configure and attach the UI renderer.
+---@field disable fun(): cmdline.Module Detach UI2, clean up resources, and restore cmdheight.
 ---@field close_history fun() Close history and restore the previous window.
 
 ---@class cmdline.CmpApi nvim-cmp methods patched for the floating command line.

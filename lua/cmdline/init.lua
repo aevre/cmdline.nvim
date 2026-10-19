@@ -6,6 +6,7 @@ local popupmenu = require("cmdline.popupmenu")
 local messages = require("cmdline.messages")
 local ns
 local attached = false
+local original_cmdheight
 
 M.close_history = messages.close_history
 
@@ -24,13 +25,28 @@ end
 
 ---@param opts? cmdline.Config Partial grouped configuration to merge with defaults.
 ---@return cmdline.Module module The public module for chaining and API access.
+function M.disable()
+	if not attached then
+		return M
+	end
+	vim.api.nvim_del_augroup_by_name("cmdline.nvim")
+	vim.ui_detach(ns)
+	commandline.teardown()
+	popupmenu.close()
+	messages.close()
+	vim.o.cmdheight = original_cmdheight
+	original_cmdheight = nil
+	attached = false
+	return M
+end
+
 function M.setup(opts)
 	local config = config_module.merge(opts)
 	commandline.configure(config, ns)
 	popupmenu.configure(config)
 	messages.configure(config)
 	if not config.cmdline.enabled and not config.messages.enabled then
-		return M
+		return M.disable()
 	end
 	highlights.setup(config)
 	if vim.fn.has("nvim-0.12") == 0 then
@@ -40,6 +56,7 @@ function M.setup(opts)
 	ns = ns or vim.api.nvim_create_namespace("cmdline.nvim")
 	commandline.configure(config, ns)
 	if not attached then
+		original_cmdheight = vim.o.cmdheight
 		vim.ui_attach(ns, {
 			ext_cmdline = true,
 			ext_popupmenu = true,

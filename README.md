@@ -274,6 +274,8 @@ Search-count virtual text is anchored beside the selected match in the current b
 require("cmdline").close_history()
 ```
 
+Call `require("cmdline").disable()` to detach UI2 and restore resources and `cmdheight` captured before setup. Passing both `cmdline.enabled = false` and `messages.enabled = false` to `setup()` does the same.
+
 Interactive confirmation prompts and return prompts remain native and are not routed through notifications.
 
 ## UI2 ownership
@@ -305,7 +307,7 @@ make check
 
 This runs Stylua formatting checks (including tests), Selene, and headless smoke and lifecycle tests. The lifecycle test captures UI dispatch to check repeated setup, scheduled rendering, popup placement, and resource cleanup; it does not replace terminal testing.
 
-The public entry is `require("cmdline")`, exposing `setup(opts)` and `close_history()`. Other modules are internal:
+The public entry is `require("cmdline")`, exposing `setup(opts)`, `disable()`, and `close_history()`. Other modules are internal:
 
 - `init.lua`: configuration assembly, UI attachment, event dispatch, and autocmd registration.
 - `commandline.lua`: command-line state, layouts, cursor rendering, resize handling, and cmp coordinate integration.
