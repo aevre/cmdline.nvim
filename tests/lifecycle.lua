@@ -38,11 +38,50 @@ assert(dispatch("cmdline_show", { { 0, "search" } }, 6, "/", "", 0, 1))
 drain()
 assert(vim.o.cmdheight == 1)
 assert(#vim.api.nvim_list_wins() == baseline + 1)
+local cmd_buf
 for _, win in ipairs(vim.api.nvim_list_wins()) do
 	if vim.api.nvim_win_get_config(win).relative ~= "" then
 		cmd_win = win
+		cmd_buf = vim.api.nvim_win_get_buf(win)
 	end
 end
+assert(dispatch("cmdline_show", { { { foreground = 0xff0000 }, "abc", 77 } }, 1, "", ">", 0, 1))
+assert(dispatch("cmdline_special_char", string.char(22), true, 1))
+assert(dispatch("cmdline_show", { { { foreground = 0xff0000 }, "abc", 77 } }, 1, "", ">", 0, 1))
+assert(dispatch("cmdline_block_show", { { { { bold = true }, "function Foo()", 78 } } }))
+assert(dispatch("cmdline_block_append", { { { italic = true }, "  echo 'foo'", 79 } }))
+drain()
+local rendered = vim.api.nvim_buf_get_lines(cmd_buf, 0, -1, false)
+assert(rendered[1] == "function Foo()" and rendered[2] == "  echo 'foo'")
+assert(rendered[3] == ">abc")
+local cmd_marks =
+	vim.api.nvim_buf_get_extmarks(cmd_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+local has_special, has_chunk_hl = false, false
+for _, mark in ipairs(cmd_marks) do
+	local details = mark[4]
+	has_special = has_special or details.virt_text ~= nil
+	has_chunk_hl = has_chunk_hl or details.hl_group ~= nil
+end
+assert(has_special and has_chunk_hl)
+local special_text
+for _, mark in ipairs(cmd_marks) do
+	if mark[4].virt_text then
+		special_text = mark[4].virt_text[1][1]
+	end
+end
+assert(special_text == "^V")
+assert(dispatch("cmdline_show", { { 0, "abcd" } }, 4, "", ">", 0, 1))
+drain()
+cmd_marks =
+	vim.api.nvim_buf_get_extmarks(cmd_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+for _, mark in ipairs(cmd_marks) do
+	assert(mark[4].virt_text == nil)
+end
+assert(dispatch("cmdline_block_hide"))
+drain()
+assert(not vim.api.nvim_win_is_valid(cmd_win))
+assert(dispatch("cmdline_show", { { 0, "search" } }, 6, "/", "", 0, 1))
+drain()
 local source_buf = vim.api.nvim_get_current_buf()
 vim.o.hlsearch = true
 vim.fn.setreg("/", "foo")

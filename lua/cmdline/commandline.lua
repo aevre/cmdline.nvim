@@ -20,6 +20,8 @@ local original_cmdheight
 local current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
 local cmdline_generation = 0
 local search_buf
+local command_block = {}
+local special_char
 ---@type fun(): string Resolved context for the current command line.
 local view_name
 ---@type fun(): cmdline.View Active preset for the current context.
@@ -124,13 +126,50 @@ active_view = function()
 end
 
 ---@return nil
+local function render_chunk_highlights(buf, namespace, chunks, start_row, start_col)
+	local row, col = start_row, start_col
+	for _, chunk in ipairs(chunks) do
+		local text = chunk[2] or ""
+		local parts = vim.split(text, "\n", { plain = true })
+		local attrs, hl_id = chunk[1], chunk[3]
+		local group
+		if type(attrs) == "table" and next(attrs) then
+			local resolved = vim.deepcopy(attrs)
+			for _, key in ipairs({ "foreground", "background", "special" }) do
+				if type(resolved[key]) == "number" then
+					resolved[key] = string.format("#%06x", resolved[key])
+				end
+			end
+			group = "CmdlineChunk" .. tostring(hl_id or vim.inspect(resolved):gsub("%W", ""))
+			vim.api.nvim_set_hl(0, group, resolved)
+		end
+		for index, part in ipairs(parts) do
+			if group and #part > 0 then
+				vim.api.nvim_buf_set_extmark(buf, namespace, row, col, {
+					end_col = col + #part,
+					hl_group = group,
+				})
+			end
+			col = col + #part
+			if index < #parts then
+				row, col = row + 1, 0
+			end
+		end
+	end
+end
+
 local function redraw_cmdline()
 	local win, buf, namespace = cmd_win, cmd_buf, ns
 	if not win or not buf or not namespace or not valid_win(win) then
 		return
 	end
 	local width, rows = dimensions()
-	local height = math.min(8, math.max(1, #chunks_text(current.chunks)))
+	local input_lines = chunks_text(current.chunks)
+	local block_lines = {}
+	for _, block_line in ipairs(command_block) do
+		vim.list_extend(block_lines, chunks_text(block_line))
+	end
+	local height = math.min(8, math.max(1, #input_lines + #block_lines))
 	local col, win_row = position(width, height, rows)
 	local view = active_view()
 	local context = view_name()
@@ -152,52 +191,76 @@ local function redraw_cmdline()
 	if not ok then
 		return
 	end
-	local lines = chunks_text(current.chunks)
-	local icon = view.icon or format.icon or ""
+	local input_row = #block_lines
+	local lines
+	local icon = current.prompt ~= "" and "" or (view.icon or format.icon or "")
 	local prefix = current.prompt ~= "" and current.prompt or current.firstc
 	local hidden = 0
 	if context == "lua" then
-		local original = lines[1]
-		lines[1] = original:gsub("^%s*lua%s+", "")
-		hidden = #original - #lines[1]
+		local original = input_lines[1]
+		input_lines[1] = original:gsub("^%s*lua%s+", "")
+		hidden = #original - #input_lines[1]
 	elseif context == "help" then
-		local original = lines[1]
-		lines[1] = original:gsub("^%s*he?l?p?%s+", "")
-		hidden = #original - #lines[1]
+		local original = input_lines[1]
+		input_lines[1] = original:gsub("^%s*he?l?p?%s+", "")
+		hidden = #original - #input_lines[1]
 	end
 	if context == "expression" and current.firstc == "=" then
 		hidden = 1
-		lines[1] = lines[1]:sub(2)
+		input_lines[1] = input_lines[1]:sub(2)
 		prefix, icon = "", ""
 	end
+	lines = vim.list_extend(vim.deepcopy(block_lines), vim.deepcopy(input_lines))
 	if icon ~= "" then
 		prefix = icon .. " " .. (current.prompt ~= "" and current.prompt or "")
 	end
 	if prefix ~= "" then
-		lines[1] = prefix .. string.rep(" ", current.indent or 0) .. lines[1]
+		lines[input_row + 1] = prefix .. string.rep(" ", current.indent or 0) .. lines[input_row + 1]
 	end
 	set_lines(buf, lines)
 	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
+	local input_prefix = prefix .. string.rep(" ", current.indent or 0)
+	local block_row = 0
+	for _, block_line in ipairs(command_block) do
+		render_chunk_highlights(buf, namespace, block_line, block_row, 0)
+		block_row = block_row + #chunks_text(block_line)
+	end
+	render_chunk_highlights(buf, namespace, current.chunks, input_row, #input_prefix)
+	if special_char and special_char.level == current.level then
+		local special_row, special_col = input_row, math.max(0, current.pos - hidden)
+		for _, line in ipairs(input_lines) do
+			if special_col <= #line then
+				break
+			end
+			special_col = special_col - #line - 1
+			special_row = special_row + 1
+		end
+		local special_column = #input_prefix + special_col
+		vim.api.nvim_buf_set_extmark(buf, namespace, special_row, special_column, {
+			virt_text = { { vim.fn.strtrans(special_char.char), "SpecialKey" } },
+			virt_text_pos = special_char.shift and "inline" or "overlay",
+		})
+	end
 	if icon ~= "" then
-		vim.api.nvim_buf_set_extmark(buf, namespace, 0, 0, {
+		vim.api.nvim_buf_set_extmark(buf, namespace, input_row, 0, {
 			end_col = #icon,
 			hl_group = format.icon_hl_group or view.icon_hl_group or config.cmdline.opts.icon_hl_group,
 		})
 	end
 	local cursor_col = #prefix + (current.indent or 0) + math.max(0, current.pos - hidden)
-	local row = 0
-	for i = 1, #lines do
+	local cursor_row = input_row
+	for i = input_row + 1, #lines do
 		if cursor_col > #lines[i] then
 			cursor_col = cursor_col - #lines[i] - 1
-			row = row + 1
+			cursor_row = cursor_row + 1
 		else
 			break
 		end
 	end
-	vim.api.nvim_win_set_cursor(win, { math.min(row + 1, #lines), cursor_col })
+	vim.api.nvim_win_set_cursor(win, { math.min(cursor_row + 1, #lines), cursor_col })
 	local start_col = #prefix + (current.indent or 0)
 	vim.api.nvim__redraw({ flush = true })
-	local screen = vim.fn.screenpos(win, 1, start_col + 1)
+	local screen = vim.fn.screenpos(win, input_row + 1, start_col + 1)
 	vim.g.ui_cmdline_pos = { screen.row, screen.col - 1 }
 	vim.api.nvim__redraw({ flush = true, cursor = true, win = win })
 end
@@ -219,7 +282,11 @@ local function open_cmdline()
 	local width, rows = dimensions()
 	local view = active_view()
 	local format = format_for(view_name())
-	local height = math.min(8, math.max(1, #chunks_text(current.chunks)))
+	local block_height = 0
+	for _, line in ipairs(command_block) do
+		block_height = block_height + #chunks_text(line)
+	end
+	local height = math.min(8, math.max(1, #chunks_text(current.chunks) + block_height))
 	local col, row = position(width, height, rows)
 	local win_opts = {
 		relative = "editor",
@@ -314,10 +381,24 @@ function M.handle(event, ...)
 			clear_search_count()
 		end
 		cmdline_generation = cmdline_generation + 1
+		local chunks, firstc, prompt, level = args[1], args[3], args[4], args[6] or 0
+		if
+			special_char
+			and (
+				special_char.level ~= level
+				or special_char.firstc ~= firstc
+				or special_char.prompt ~= prompt
+				or special_char.content ~= table.concat(chunks_text(chunks))
+			)
+		then
+			special_char = nil
+		end
+		cmdline_generation = cmdline_generation + 1
 		local generation = cmdline_generation
 		current.active = true
-		current.chunks, current.pos, current.firstc = args[1], args[2], args[3]
-		current.prompt, current.indent, current.level = args[4], args[5], args[6] or 0
+		command_block = {}
+		current.chunks, current.pos, current.firstc = chunks, args[2], firstc
+		current.prompt, current.indent, current.level = prompt, args[5], level
 		if active_view().position == "mini" and not mini_cmdheight then
 			original_cmdheight = vim.o.cmdheight
 			vim.o.cmdheight = 1
@@ -357,13 +438,60 @@ function M.handle(event, ...)
 		end
 		local args = { ... }
 		current.pos = args[1] or current.pos
+		special_char = nil
 		vim.schedule(redraw_cmdline)
 		return true
 	elseif event == "cmdline_special_char" then
 		if not config.cmdline.enabled then
 			return
 		end
-		-- UI2 includes this only for pending keys; the native cmdline remains authoritative.
+		local char, shift, level = ...
+		special_char = {
+			char = char,
+			shift = shift,
+			level = level,
+			firstc = current.firstc,
+			prompt = current.prompt,
+			content = table.concat(chunks_text(current.chunks)),
+		}
+		local generation = cmdline_generation
+		vim.schedule(function()
+			if current.active and generation == cmdline_generation then
+				open_cmdline()
+				redraw_cmdline()
+			end
+		end)
+		return true
+	elseif event == "cmdline_block_show" then
+		if not config.cmdline.enabled then
+			return
+		end
+		local lines = (...)
+		command_block = lines or {}
+		vim.schedule(function()
+			open_cmdline()
+			redraw_cmdline()
+		end)
+		return true
+	elseif event == "cmdline_block_append" then
+		if not config.cmdline.enabled then
+			return
+		end
+		command_block[#command_block + 1] = (...)
+		vim.schedule(function()
+			open_cmdline()
+			redraw_cmdline()
+		end)
+		return true
+	elseif event == "cmdline_block_hide" then
+		if not config.cmdline.enabled then
+			return
+		end
+		command_block = {}
+		cmdline_generation = cmdline_generation + 1
+		current.active = false
+		clear_search_count()
+		vim.schedule(close_cmdline)
 		return true
 	elseif event == "msg_show" then
 		local args = { ... }
@@ -528,6 +656,8 @@ function M.teardown()
 	end
 	vim.g.ui_cmdline_pos = nil
 	current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
+	command_block = {}
+	special_char = nil
 end
 
 ---@return nil
