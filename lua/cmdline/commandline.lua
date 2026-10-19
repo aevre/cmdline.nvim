@@ -133,6 +133,55 @@ active_view = function()
 end
 
 ---@return nil
+local function render_syntax_highlights(buf, namespace, text, lang, start_row, start_col)
+	local ok, parser = pcall(vim.treesitter.get_string_parser, text, lang)
+	if not ok then
+		return
+	end
+	local parsed, trees = pcall(parser.parse, parser)
+	local query_ok, query = pcall(vim.treesitter.query.get, lang, "highlights")
+	if not parsed or not query_ok or not query then
+		return
+	end
+	local function_captures = {}
+	for _, tree in ipairs(trees) do
+		for capture, node in query:iter_captures(tree:root(), text) do
+			local name = query.captures[capture]
+			if name:sub(1, 1) ~= "_" then
+				local start_row_offset, start_byte, end_row_offset, end_byte = node:range()
+				local group = "@" .. name .. "." .. lang
+				if start_row_offset == 0 and end_row_offset == 0 and end_byte > start_byte then
+					local line = vim.api.nvim_buf_get_lines(buf, start_row, start_row + 1, false)[1] or ""
+					local first_col, last_col = start_col + start_byte, start_col + end_byte
+					if first_col >= 0 and last_col <= #line then
+						vim.api.nvim_buf_set_extmark(buf, namespace, start_row, first_col, {
+							end_col = last_col,
+							hl_group = group,
+							priority = 100,
+						})
+						if lang == "lua" and (name == "function.call" or name == "function.builtin") then
+							function_captures[first_col] = last_col
+						end
+					end
+				end
+			end
+		end
+	end
+	if lang == "lua" then
+		for first_col, name in text:gmatch("()([%a_][%w_]*)") do
+			local next_char = text:sub(first_col + #name):match("^%s*(.)")
+			local call_start, call_end = start_col + first_col - 1, start_col + first_col - 1 + #name
+			if next_char == "(" and not function_captures[call_start] then
+				vim.api.nvim_buf_set_extmark(buf, namespace, start_row, call_start, {
+					end_col = call_end,
+					hl_group = "@function.call.lua",
+					priority = 110,
+				})
+			end
+		end
+	end
+end
+
 local function render_chunk_highlights(buf, namespace, chunks, start_row, start_col)
 	local row, col = start_row, start_col
 	for _, chunk in ipairs(chunks) do
@@ -142,9 +191,11 @@ local function render_chunk_highlights(buf, namespace, chunks, start_row, start_
 		local group
 		if type(attrs) == "table" and next(attrs) then
 			local resolved = vim.deepcopy(attrs)
-			for _, key in ipairs({ "foreground", "background", "special" }) do
-				if type(resolved[key]) == "number" then
-					resolved[key] = string.format("#%06x", resolved[key])
+			for key, name in pairs({ foreground = "fg", background = "bg", special = "sp" }) do
+				local color = resolved[key]
+				resolved[key] = nil
+				if color ~= nil then
+					resolved[name] = type(color) == "number" and string.format("#%06x", color) or color
 				end
 			end
 			group = "CmdlineChunk" .. tostring(hl_id or vim.inspect(resolved):gsub("%W", ""))
@@ -244,6 +295,30 @@ local function redraw_cmdline()
 		block_row = block_row + #chunks_text(block_line)
 	end
 	render_chunk_highlights(buf, namespace, current.chunks, input_row, #input_prefix)
+	local command_text = table.concat(chunks_text(current.chunks), "\n")
+	if context == "lua" then
+		local code = command_text
+		if current.firstc == ":" then
+			local lua_start = code:find("%f[%a]lua%f[%A]")
+			if lua_start then
+				code = code:sub(lua_start):gsub("^lua%s*=?%s*", "")
+			else
+				code = code:gsub("^%s*=+%s*", "")
+			end
+		else
+			code = code:gsub("^%s*=+%s*", "")
+		end
+		render_syntax_highlights(buf, namespace, code, "lua", input_row, #input_prefix)
+	elseif current.firstc == ":" then
+		render_syntax_highlights(
+			buf,
+			namespace,
+			current.firstc .. command_text,
+			"vim",
+			input_row,
+			math.max(0, #input_prefix - 1)
+		)
+	end
 	if special_char and special_char.level == current.level then
 		local special_row, special_col = input_row, math.max(0, current.pos - hidden)
 		for _, line in ipairs(input_lines) do

@@ -65,7 +65,7 @@ assert(dispatch("cmdline_hide", 1, false))
 drain()
 assert(not vim.api.nvim_win_is_valid(nested_win))
 
-assert(dispatch("cmdline_show", { { 0, "= 1 + 2" } }, 8, ":", "", 0, 1))
+assert(dispatch("cmdline_show", { { 0, "= print(1 + 2)" } }, 15, ":", "", 0, 1))
 drain()
 for _, win in ipairs(vim.api.nvim_list_wins()) do
 	if vim.api.nvim_win_get_config(win).relative ~= "" then
@@ -74,9 +74,53 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 end
 assert(has_title(nested_win, "Lua"))
 local lua_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
-assert(lua_line:find("", 1, true) and lua_line:find("1 + 2", 1, true), vim.inspect(lua_line))
+assert(lua_line:find("", 1, true) and lua_line:find("print(1 + 2)", 1, true), vim.inspect(lua_line))
+local lua_buf = vim.api.nvim_win_get_buf(nested_win)
+local lua_marks =
+	vim.api.nvim_buf_get_extmarks(lua_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+local highlighted_print, highlighted_number = false, false
+for _, mark in ipairs(lua_marks) do
+	local text = lua_line:sub(mark[3] + 1, mark[4].end_col)
+	highlighted_print = highlighted_print or (text == "print" and mark[4].hl_group == "@function.builtin.lua")
+	highlighted_number = highlighted_number or (text == "1" and mark[4].hl_group == "@number.lua")
+end
+assert(highlighted_print and highlighted_number)
 assert(has_title(nested_win, "Lua"))
 assert(not lua_line:find(":=", 1, true), vim.inspect(lua_line))
+assert(dispatch("cmdline_show", { { 0, "lua print(1 + 2)" } }, 16, ":", "", 0, 1))
+drain()
+local lua_command_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+assert(lua_command_line:find("print(1 + 2)", 1, true), vim.inspect(lua_command_line))
+lua_buf = vim.api.nvim_win_get_buf(nested_win)
+lua_marks =
+	vim.api.nvim_buf_get_extmarks(lua_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+highlighted_print = false
+for _, mark in ipairs(lua_marks) do
+	local text = lua_command_line:sub(mark[3] + 1, mark[4].end_col)
+	highlighted_print = highlighted_print or (text == "print" and mark[4].hl_group == "@function.builtin.lua")
+end
+assert(highlighted_print)
+for _, partial in ipairs({ 'lua print("', 'lua print("hello', 'lua print("hello")' }) do
+	assert(dispatch("cmdline_show", { { 0, partial } }, #partial, ":", "", 0, 1))
+	drain()
+	local partial_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+	local partial_marks = vim.api.nvim_buf_get_extmarks(
+		vim.api.nvim_win_get_buf(nested_win),
+		vim.api.nvim_get_namespaces()["cmdline.nvim"],
+		0,
+		-1,
+		{ details = true }
+	)
+	local function_hl = false
+	for _, mark in ipairs(partial_marks) do
+		if partial_line:sub(mark[3] + 1, mark[4].end_col) == "print" then
+			function_hl = function_hl
+				or mark[4].hl_group == "@function.call.lua"
+				or mark[4].hl_group == "@function.builtin.lua"
+		end
+	end
+	assert(function_hl, partial)
+end
 assert(dispatch("cmdline_hide", 1, false))
 drain()
 
@@ -135,6 +179,13 @@ for _, mark in ipairs(cmd_marks) do
 	has_chunk_hl = has_chunk_hl or details.hl_group ~= nil
 end
 assert(has_special and has_chunk_hl)
+local chunk_group
+for _, mark in ipairs(cmd_marks) do
+	if mark[4].hl_group then
+		chunk_group = mark[4].hl_group
+	end
+end
+assert(chunk_group and vim.api.nvim_get_hl(0, { name = chunk_group }).fg == 0xff0000)
 local special_text
 for _, mark in ipairs(cmd_marks) do
 	if mark[4].virt_text then
@@ -142,6 +193,19 @@ for _, mark in ipairs(cmd_marks) do
 	end
 end
 assert(special_text == "^V")
+assert(dispatch("cmdline_show", { { 0, 'echo "hi"' } }, 8, ":", "", 0, 1))
+drain()
+local vim_buf = vim.api.nvim_win_get_buf(cmd_win)
+local vim_line = vim.api.nvim_buf_get_lines(vim_buf, 0, -1, false)[1]
+local vim_marks =
+	vim.api.nvim_buf_get_extmarks(vim_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+local highlighted_echo, highlighted_string = false, false
+for _, mark in ipairs(vim_marks) do
+	local text = vim_line:sub(mark[3] + 1, mark[4].end_col)
+	highlighted_echo = highlighted_echo or (text == "echo" and mark[4].hl_group == "@keyword.vim")
+	highlighted_string = highlighted_string or (text == '"hi"' and mark[4].hl_group == "@string.vim")
+end
+assert(highlighted_echo and highlighted_string)
 assert(dispatch("cmdline_show", { { 0, "abcd" } }, 4, "", ">", 0, 1))
 drain()
 cmd_marks =
