@@ -66,7 +66,6 @@ for _, item in ipairs({
 	{ "echo", vim.log.levels.INFO },
 	{ "emsg", vim.log.levels.ERROR },
 	{ "wmsg", vim.log.levels.WARN },
-	{ "search_count", vim.log.levels.WARN },
 }) do
 	vim.api.nvim_echo({ { item[1] } }, false, { kind = item[1] })
 	assert(vim.wait(500, function()
@@ -74,8 +73,11 @@ for _, item in ipairs({
 	end))
 	local notification = table.remove(received, 1)
 	assert(notification[1] == item[1] and notification[2] == item[2])
-	assert(notification[3] == (item[1] == "search_count" and "Search" or "Messages"))
+	assert(notification[3] == "Messages")
 end
+vim.api.nvim_echo({ { "[3/10]" } }, false, { kind = "search_count" })
+vim.wait(50)
+assert(#received == 0)
 vim.notify = function(text, level)
 	native_notify(text, level)
 end

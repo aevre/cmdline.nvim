@@ -5,6 +5,12 @@ local valid_win, close, chunks_text, set_lines = ui.valid_win, ui.close, ui.chun
 local config
 local extensions = require("cmdline.extensions")
 local ns
+local search_ns
+local search_generation = 0
+local search_abort_generation = 0
+local search_aborted = false
+local search_watch_pending = false
+local search_chunks
 local cmd_buf
 local cmd_win
 local cmp_patched = false
@@ -12,6 +18,7 @@ local mini_cmdheight = false
 ---@type cmdline.CommandlineState
 local current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
 local cmdline_generation = 0
+local search_buf
 ---@type fun(): string Resolved context for the current command line.
 local view_name
 ---@type fun(): cmdline.View Active preset for the current context.
@@ -260,6 +267,37 @@ local function close_cmdline()
 	current = { active = false, firstc = "", prompt = "", level = 0, pos = 0, chunks = {} }
 end
 
+---@return nil
+local function clear_search_count()
+	search_chunks = nil
+	search_generation = search_generation + 1
+	local generation = search_generation
+	vim.schedule(function()
+		if generation == search_generation and search_buf and vim.api.nvim_buf_is_valid(search_buf) then
+			vim.api.nvim_buf_clear_namespace(search_buf, search_ns, 0, -1)
+			search_buf = nil
+		end
+	end)
+end
+
+---@return nil
+local function watch_search_count()
+	if search_watch_pending or not search_chunks then
+		return
+	end
+	search_watch_pending = true
+	vim.defer_fn(function()
+		search_watch_pending = false
+		if not vim.o.hlsearch then
+			return
+		end
+		if vim.v.hlsearch == 0 then
+			clear_search_count()
+		end
+		watch_search_count()
+	end, 30)
+end
+
 ---@param event string UI2 event name.
 ---@return boolean? handled Whether this module consumed the event.
 function M.handle(event, ...)
@@ -267,6 +305,11 @@ function M.handle(event, ...)
 		local args = { ... }
 		if not config.cmdline.enabled then
 			return
+		end
+		search_abort_generation = search_abort_generation + 1
+		search_aborted = false
+		if not current.active or current.firstc ~= args[3] or not args[3]:match("^[/?]$") then
+			clear_search_count()
 		end
 		cmdline_generation = cmdline_generation + 1
 		local generation = cmdline_generation
@@ -288,8 +331,20 @@ function M.handle(event, ...)
 		if not config.cmdline.enabled then
 			return
 		end
+		local args = { ... }
 		cmdline_generation = cmdline_generation + 1
+		if current.firstc:match("^[/?]$") and args[2] then
+			search_abort_generation = search_abort_generation + 1
+			local generation = search_abort_generation
+			search_aborted = true
+			vim.schedule(function()
+				if generation == search_abort_generation then
+					search_aborted = false
+				end
+			end)
+		end
 		current.active = false
+		clear_search_count()
 		restore_cmdheight()
 		vim.schedule(close_cmdline)
 		return true
@@ -307,7 +362,109 @@ function M.handle(event, ...)
 		end
 		-- UI2 includes this only for pending keys; the native cmdline remains authoritative.
 		return true
+	elseif event == "msg_show" then
+		local args = { ... }
+		if args[1] == "search_count" then
+			if search_aborted then
+				return true
+			end
+			if config.messages.view_search then
+				local chunks = args[2]
+				local count = chunks[#chunks]
+				local current_match, total
+				if count then
+					current_match, total = count[2]:match("W? %[(>?%d*%??)/>?(%d*%?*)%]")
+				end
+				if current_match and total then
+					local opts = config.messages.search_count
+					local formatted = opts.format
+						:gsub("{current}", function()
+							return current_match
+						end)
+						:gsub("{total}", function()
+							return total
+						end)
+					local current_start, current_end = formatted:find(current_match, 1, true)
+					search_chunks = {
+						{ formatted:sub(1, current_start - 1), opts.hl_group },
+						{ current_match, opts.current_hl_group },
+						{ formatted:sub(current_end + 1), opts.hl_group },
+					}
+					M.refresh_search_count()
+					watch_search_count()
+				end
+			end
+			return true
+		end
 	end
+end
+
+---@return nil
+function M.refresh_search_count()
+	if not config.messages.view_search or not search_chunks then
+		return
+	end
+	search_generation = search_generation + 1
+	local generation = search_generation
+	vim.schedule(function()
+		if generation ~= search_generation or not search_chunks then
+			return
+		end
+		if vim.o.hlsearch and vim.v.hlsearch == 0 then
+			clear_search_count()
+			return
+		end
+		local buf = vim.api.nvim_get_current_buf()
+		local win = vim.api.nvim_get_current_win()
+		local cursor = vim.api.nvim_win_get_cursor(win)
+		local opts = config.messages.search_count
+		local mark = { id = 1, virt_text = search_chunks }
+		local line = vim.api.nvim_buf_get_lines(buf, cursor[1] - 1, cursor[1], false)[1] or ""
+		local start_col, end_col = cursor[2], cursor[2]
+		if search_buf and search_buf ~= buf and vim.api.nvim_buf_is_valid(search_buf) then
+			vim.api.nvim_buf_clear_namespace(search_buf, search_ns, 0, -1)
+		end
+		local pattern = vim.fn.getreg("/")
+		local ok, match_pos = pcall(vim.fn.searchpos, pattern, "bcnW", 0)
+		if not ok or match_pos[1] ~= cursor[1] or match_pos[2] <= 0 then
+			vim.api.nvim_buf_clear_namespace(buf, search_ns, 0, -1)
+			search_buf = nil
+			return
+		end
+		start_col = vim.fn.byteidx(line, match_pos[2] - 1)
+		local match = vim.fn.matchstr(line:sub(start_col + 1), pattern)
+		end_col = start_col + #match
+		if cursor[2] < start_col or cursor[2] >= end_col then
+			vim.api.nvim_buf_clear_namespace(buf, search_ns, 0, -1)
+			search_buf = nil
+			return
+		end
+		if opts.position == "line_end" then
+			mark.virt_text_pos = "eol"
+		else
+			local count_width = 0
+			for _, chunk in ipairs(search_chunks) do
+				count_width = count_width + vim.fn.strdisplaywidth(chunk[1])
+			end
+			local match_end = vim.fn.screenpos(win, cursor[1], end_col + 1)
+			local match_start = vim.fn.screenpos(win, cursor[1], start_col + 1)
+			local win_col = vim.api.nvim_win_get_position(win)[2]
+			local right_col = match_end.col + 3
+			local right_edge = win_col + vim.api.nvim_win_get_width(win)
+			if right_col + count_width - 1 <= right_edge then
+				mark.virt_text_pos = "overlay"
+				mark.virt_text_win_col = right_col - win_col - 1
+			else
+				mark.virt_text_pos = "overlay"
+				mark.virt_text_win_col = math.max(0, match_start.col - win_col - count_width - 3)
+			end
+		end
+		if search_buf and search_buf ~= buf and vim.api.nvim_buf_is_valid(search_buf) then
+			vim.api.nvim_buf_clear_namespace(search_buf, search_ns, 0, -1)
+		end
+		search_buf = buf
+		vim.api.nvim_buf_set_extmark(buf, search_ns, cursor[1] - 1, cursor[2], mark)
+	end)
 end
 
 ---@return nil
@@ -346,6 +503,7 @@ end
 ---@return nil
 function M.configure(opts, namespace)
 	config, ns = opts, namespace
+	search_ns = vim.api.nvim_create_namespace("cmdline.search_count")
 end
 
 ---@return nil

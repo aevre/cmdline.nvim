@@ -177,9 +177,6 @@ local function should_notify_message(kind)
 end
 
 local function is_search_message(kind, chunks)
-	if kind == "search_count" then
-		return true
-	end
 	if kind ~= "wmsg" and kind ~= "emsg" then
 		return false
 	end

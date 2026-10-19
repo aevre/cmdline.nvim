@@ -122,9 +122,22 @@ vim.opt.guicursor = {
 - `enabled`: enable UI2 message handling.
 - `view`, `view_error`, and `view_warn`: destination names kept for configuration compatibility; ordinary messages are currently sent through `vim.notify()`.
 - `view_history`: name of the history view. The built-in `messages` view is a scrollable floating window.
-- `view_search`: set to `false` to disable search-result notification routing.
+- `view_search`: set to `false` to disable search-result routing.
 
-Errors and warnings retain their log levels. Search messages use the `Search` notification title. External notification providers retain their own history.
+Errors and warnings retain their log levels. Search counts are virtual text, not notifications. Configure their format, placement, and highlights with `messages.search_count`:
+
+```lua
+messages = {
+  search_count = {
+    format = "[{current}/{total}]",
+    position = "word", -- or "line_end"
+    hl_group = "CmdlineSearchCount",
+    current_hl_group = "CmdlineSearchCountCurrent",
+  },
+}
+```
+
+The default count uses Neovim's compact `[current/total]` style, as in Noice. The configured format is displayed as written, with no extra prefix. The default places it three spaces to the right of the match, or to its left when it would cross the editor window's right edge. Built-in highlight groups use foreground colors and bold only. Cancelling a search with Esc or Ctrl-C clears its count; `:nohlsearch` also clears it when `hlsearch` is enabled. The plugin does not bind Esc. External notification providers retain their own history.
 
 ### `popupmenu`
 
@@ -253,7 +266,7 @@ Configure the links with `cmdline.opts.highlights`. Icon priority is format `ico
 
 Ordinary UI2 output, Lua output, shell output, errors, and warnings are routed through public `vim.notify()` when a custom provider is installed. With Neovim's default provider, messages appear for four seconds in a borderless, full-width window at the bottom left, using Neovim's `MsgArea` highlight and preserving message highlights, avoiding a loop through `nvim_echo()`. The latest message replaces the previous one; long messages are capped at half the screen height. Messages recorded by Neovim remain available in `:messages`.
 
-The routing guard handles providers that synchronously echo a notification back through UI2. A provider that writes it back asynchronously with `nvim_echo()` cannot be reliably distinguished from a new message and may cause duplicate routing; providers that render their own notifications without writing back are unaffected.
+Search-count virtual text is anchored beside the selected match in the current buffer. The routing guard handles providers that synchronously echo a notification back through UI2. A provider that writes it back asynchronously with `nvim_echo()` cannot be reliably distinguished from a new message and may cause duplicate routing; providers that render their own notifications without writing back are unaffected.
 
 `:messages` and `g<` open a dedicated scrollable `Messages` floating window. Press `q` or `<Esc>` to close it and restore the previous window. The public API is:
 

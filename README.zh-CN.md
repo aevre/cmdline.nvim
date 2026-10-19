@@ -122,9 +122,22 @@ vim.opt.guicursor = {
 - `enabled`：启用 UI2 消息处理。
 - `view`、`view_error` 和 `view_warn`：保留用于配置消息目标名称；当前普通消息通过 `vim.notify()` 发送。
 - `view_history`：历史视图名称。内置的 `messages` 视图是可滚动浮动窗口。
-- `view_search`：设为 `false` 可关闭搜索结果通知路由。
+- `view_search`：设为 `false` 可关闭搜索结果路由。
 
-错误和警告保留对应日志级别。搜索消息使用 `Search` 通知标题。外部通知 provider 继续管理自己的通知历史。
+错误和警告保留对应日志级别。搜索数量以虚拟文字显示，不作为通知发送。可通过 `messages.search_count` 配置格式、位置和高亮：
+
+```lua
+messages = {
+  search_count = {
+    format = "[{current}/{total}]",
+    position = "word", -- 或 "line_end"
+    hl_group = "CmdlineSearchCount",
+    current_hl_group = "CmdlineSearchCountCurrent",
+  },
+}
+```
+
+默认使用与 Noice 相同的紧凑格式 `[当前/总数]`，严格按配置格式显示，不额外添加前缀。默认在匹配词右侧间隔 3 格；只有超过编辑器窗口右边界时才改放在词左侧。内置高亮组只设置前景色和粗体。光标离开当前匹配或按 Esc / Ctrl-C 取消搜索后，计数会隐藏；启用 `hlsearch` 时，执行 `:nohlsearch` 也会清除计数。插件不绑定 Esc。外部通知 provider 继续管理自己的通知历史。
 
 ### `popupmenu`
 
@@ -253,7 +266,7 @@ Lua 和 help 视图会隐藏命令前缀，并补偿光标位置。将某个 for
 
 安装自定义通知 provider 时，普通 UI2 输出、Lua 输出、shell 输出、错误和警告通过公开的 `vim.notify()` 路由。使用 Neovim 默认 provider 时，消息在左下角的无边框、全宽临时窗口中显示四秒，使用 Neovim 的 `MsgArea` 高亮并保留消息自身的高亮，避免通过 `nvim_echo()` 形成回路。新消息替换上一条消息；长消息最多占半屏高度。Neovim 已记录的消息仍可通过 `:messages` 查看。
 
-路由保护可处理同步通过 UI2 回写通知的 provider。若 provider 稍后通过 `nvim_echo()` 回写，插件无法可靠判断这是原通知的回声还是新消息，可能导致重复路由；只显示自身通知、不回写消息的 provider 不受此限制。
+搜索数量以虚拟文字显示在当前缓冲区的选中结果旁。路由保护可处理同步通过 UI2 回写通知的 provider。若 provider 稍后通过 `nvim_echo()` 回写，插件无法可靠判断这是原通知的回声还是新消息，可能导致重复路由；只显示自身通知、不回写消息的 provider 不受此限制。
 
 `:messages` 和 `g<` 会打开独立的可滚动 `Messages` 浮动窗口。按 `q` 或 `<Esc>` 关闭，并恢复之前的窗口。公开 API 是：
 

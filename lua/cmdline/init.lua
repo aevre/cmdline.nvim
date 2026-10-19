@@ -60,6 +60,10 @@ function M.setup(opts)
 		group = group,
 		callback = commandline.resize,
 	})
+	vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter" }, {
+		group = group,
+		callback = commandline.refresh_search_count,
+	})
 	return M
 end
 

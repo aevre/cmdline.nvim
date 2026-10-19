@@ -13,6 +13,8 @@ function M.setup(config)
 	link("CmdlineBorder", groups.border, "FloatBorder")
 	link("CmdlineTitle", groups.title, "FloatTitle")
 	link("CmdlinePum", groups.pum, "Pmenu")
+	vim.api.nvim_set_hl(0, "CmdlineSearchCount", { fg = "#ff9e64", bold = true, default = true })
+	vim.api.nvim_set_hl(0, "CmdlineSearchCountCurrent", { fg = "#a9b1d6", bold = true, default = true })
 end
 
 return M

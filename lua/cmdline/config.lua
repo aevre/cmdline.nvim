@@ -72,13 +72,26 @@
 ---@field opts? cmdline.CmdlineOptions Shared layout and highlight options.
 ---@field format? table<string, cmdline.Format|false> Per-context formats; `false` disables one.
 
+---@class cmdline.SearchCount Search-count text and placement.
+---@field format? string Format string with `{current}` and `{total}` placeholders.
+---@field position? "word"|"line_end" Place the count beside the match or at the line end.
+---@field hl_group? string Foreground highlight group for separators and total count.
+---@field current_hl_group? string Foreground highlight group for the current-match number.
+
+---@class cmdline.SearchCountResolved Resolved search-count text settings.
+---@field format string Format string with `{current}` and `{total}` placeholders.
+---@field position "word"|"line_end" Placement beside the match or at line end.
+---@field hl_group string Highlight group for separators and total count.
+---@field current_hl_group string Highlight group for the current-match number.
+
 ---@class cmdline.MessagesConfig Message routing and history configuration.
 ---@field enabled? boolean Whether message routing and history are active.
 ---@field view? string Default destination name retained for configuration compatibility.
 ---@field view_error? string Destination name retained for configuration compatibility.
 ---@field view_warn? string Destination name retained for configuration compatibility.
 ---@field view_history? string History view name retained for configuration compatibility.
----@field view_search? string|false Search destination name or `false` to disable routing.
+---@field view_search? string|false Enable or disable search-result routing.
+---@field search_count? cmdline.SearchCount Search-count formatting, placement, and highlight.
 
 ---@class cmdline.PopupItem Completion item in UI2 tuple or dictionary form.
 ---@field [1]? string Completion word in the UI2 tuple form.
@@ -122,7 +135,8 @@
 ---@field view_error string Error destination name retained for compatibility.
 ---@field view_warn string Warning destination name retained for compatibility.
 ---@field view_history string History view name retained for compatibility.
----@field view_search string|false Search destination name or `false` to disable routing.
+---@field view_search string|false Enable or disable search-result routing.
+---@field search_count cmdline.SearchCountResolved Resolved search-count display settings.
 
 ---@class cmdline.ResolvedPopupmenuConfig Complete popupmenu settings after merging defaults.
 ---@field enabled boolean Whether popupmenu rendering is active.
@@ -200,6 +214,12 @@ M.defaults = {
 		view_warn = "notify",
 		view_history = "messages",
 		view_search = "notify",
+		search_count = {
+			format = "[{current}/{total}]",
+			position = "word",
+			hl_group = "CmdlineSearchCount",
+			current_hl_group = "CmdlineSearchCountCurrent",
+		},
 	},
 	popupmenu = {
 		enabled = true,
