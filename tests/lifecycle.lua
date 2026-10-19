@@ -212,6 +212,23 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 end
 assert(dispatch("popupmenu_select", 1))
 drain()
+local completion_items = {}
+for i = 1, 13 do
+	completion_items[i] = { "item" .. i }
+end
+assert(dispatch("popupmenu_show", completion_items, 0, 0, 0, -1))
+drain()
+assert(dispatch("popupmenu_select", 12))
+drain()
+local popup_lines
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local opts = vim.api.nvim_win_get_config(win)
+	if opts.relative == "win" and opts.zindex == 201 then
+		popup_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+		assert(opts.height == 12)
+	end
+end
+assert(popup_lines and #popup_lines == 12 and popup_lines[1] == "  item2" and popup_lines[12] == "> item13")
 assert(dispatch("cmdline_hide"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)

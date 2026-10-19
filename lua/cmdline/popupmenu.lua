@@ -6,22 +6,28 @@ local commandline = require("cmdline.commandline")
 local pum_buf, pum_win
 local pum_items = {}
 local pum_selected = -1
+local pum_first = 1
+local pum_height = 0
 
 local function redraw_pum()
 	if not valid_win(pum_win) then
 		return
 	end
+	if pum_selected >= 0 then
+		pum_first = math.max(1, math.min(pum_selected + 1, #pum_items - pum_height + 1))
+	end
 	local lines = {}
-	for i, item in ipairs(pum_items) do
+	for i = pum_first, math.min(#pum_items, pum_first + pum_height - 1) do
+		local item = pum_items[i]
 		local label = item.word or item[1] or ""
-		lines[i] = (i == pum_selected + 1 and "> " or "  ") .. label
+		lines[#lines + 1] = (i == pum_selected + 1 and "> " or "  ") .. label
 	end
 	set_lines(pum_buf, lines)
 end
 
 local function close_pum()
 	pum_win, pum_buf = close(pum_win, pum_buf)
-	pum_items, pum_selected = {}, -1
+	pum_items, pum_selected, pum_first, pum_height = {}, -1, 1, 0
 end
 
 local function external_completion_menu()
@@ -49,6 +55,7 @@ local function open_pum(items, selected, row, col, grid)
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = pum_buf })
 	vim.api.nvim_set_option_value("modifiable", false, { buf = pum_buf })
 	local height = math.min(#items, 12)
+	pum_height = height
 	local width = 1
 	for _, item in ipairs(items) do
 		width = math.max(width, vim.fn.strdisplaywidth(item.word or item[1] or "") + 2)
