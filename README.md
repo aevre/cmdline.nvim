@@ -343,4 +343,4 @@ The public entry is `require("cmdline")`, exposing `setup(opts)`, `disable()`, a
 - `extensions.lua`: command and prompt context resolution.
 - `highlights.lua`: internal highlight links.
 
-Feature modules own their resources and receive configuration from `setup()`. They depend on `ui.lua`; command-line rendering also uses `extensions.lua`. No feature module requires the public entry. Requiring the plugin does not attach UI surfaces or create windows; repeated `setup()` reuses the attachment and replaces the autocmd group.
+Feature modules own their resources and receive configuration from `setup()`. They depend on `ui.lua`; command-line rendering also uses `extensions.lua`. No feature module requires the public entry. The guarded `plugin/cmdline.lua` entrypoint applies defaults when Neovim sources the plugin; requiring the Lua module alone does not attach UI surfaces or create windows. Repeated `setup()` reuses the attachment and replaces the autocmd group, so a plugin manager can apply user options afterward.

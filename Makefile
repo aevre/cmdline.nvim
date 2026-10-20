@@ -1,4 +1,4 @@
-LUA_FILES := $(shell find lua -name '*.lua')
+LUA_FILES := $(shell find lua plugin -name '*.lua')
 TEST_FILES := $(wildcard tests/*.lua)
 
 .PHONY: fmt fmt-check lint test check

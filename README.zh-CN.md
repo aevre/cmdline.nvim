@@ -343,4 +343,4 @@ make check
 - `extensions.lua`：命令和 prompt 的 context 解析。
 - `highlights.lua`：内部高亮链接。
 
-功能模块管理各自的资源，由 `setup()` 传入配置；它们依赖 `ui.lua`，命令行渲染另依赖 `extensions.lua`。功能模块不反向 require 公共入口。require 插件不会挂载 UI 或创建窗口；重复 `setup()` 复用已有挂载并替换 autocmd group。
+功能模块管理各自的资源，由 `setup()` 传入配置；它们依赖 `ui.lua`，命令行渲染另依赖 `extensions.lua`。功能模块不反向 require 公共入口。Neovim source 插件时，带 guard 的 `plugin/cmdline.lua` 入口会应用默认配置；仅 require Lua 模块不会挂载 UI 或创建窗口。重复 `setup()` 会复用已有挂载并替换 autocmd group，因此插件管理器随后可以应用用户选项。
