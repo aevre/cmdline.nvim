@@ -515,6 +515,16 @@ assert(#vim.api.nvim_list_wins() == baseline)
 cmdline.setup()
 
 local error_hl = vim.api.nvim_get_hl_id_by_name("ErrorMsg")
+local received_search_failure = {}
+local original_search_notify = vim.notify
+vim.notify = function(text, level, opts)
+	received_search_failure[#received_search_failure + 1] = { text = text, level = level, opts = opts }
+end
+assert(dispatch("msg_show", "search_cmd", { { 0, "/foo" } }, false, false, false) == nil)
+assert(dispatch("msg_show", "emsg", { { 0, "E486: Pattern not found: foo", error_hl } }, false, false, false))
+drain()
+assert(#received_search_failure == 1 and received_search_failure[1].text:find("E486", 1, true))
+vim.notify = original_search_notify
 assert(dispatch("msg_show", "emsg", { { 0, "first\nsecond", error_hl } }, false, true, false, 7))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline + 1)
@@ -591,6 +601,40 @@ end
 assert(unknown_visible)
 assert(dispatch("msg_clear"))
 drain()
+local saved_notify = vim.notify
+local received = {}
+vim.notify = function(text, level, opts)
+	received[#received + 1] = { text = text, level = level, id = opts.id }
+end
+assert(dispatch("msg_show", "progress", { { 0, '"file.lua" ' } }, false, false, false, "bufwrite"))
+assert(dispatch("msg_show", "progress", { { 0, '"file.lua" 89L, 1454B 已写入' } }, true, false, false, "bufwrite"))
+drain()
+assert(#received == 1 and received[1].text == '"file.lua" 89L, 1454B 已写入')
+assert(received[1].id == "cmdline.nvim:string:bufwrite")
+assert(dispatch("msg_show", "progress", { { 0, "updated" } }, false, false, false, "bufwrite"))
+drain()
+assert(#received == 2 and received[2].id == received[1].id)
+assert(dispatch("msg_show", "echo", { { 0, "start" } }, false, false, false))
+assert(dispatch("msg_show", "echo", { { 0, " tail" } }, false, false, true))
+drain()
+assert(#received == 3 and received[3].text == "start tail")
+local last_id = received[3].id
+assert(dispatch("msg_show", "echo", { { 0, "replaced" } }, true, false, false))
+drain()
+assert(#received == 4 and received[4].text == "replaced" and received[4].id == last_id)
+assert(dispatch("msg_show", "echo", { { 0, "number" } }, false, false, false, 7))
+assert(dispatch("msg_show", "echo", { { 0, "string" } }, false, false, false, "7"))
+drain()
+assert(#received == 6 and received[5].id ~= received[6].id)
+assert(dispatch("msg_show", "echo", { { 0, "cancelled" } }, false))
+assert(dispatch("msg_clear"))
+drain()
+assert(#received == 6)
+assert(dispatch("msg_show", "echo", { { 0, "stale" } }, false))
+require("cmdline.messages").close()
+drain()
+assert(#received == 6)
+vim.notify = saved_notify
 cmdline.setup({ messages = { enabled = false } })
 assert(not dispatch("msg_show", "echo", { { 0, "not consumed" } }, false, false, false, 13))
 cmdline.setup({ messages = { enabled = true } })

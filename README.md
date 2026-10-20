@@ -117,7 +117,7 @@ vim.opt.guicursor = {
 - `enabled`: enable UI2 message handling.
 - `view_search`: set to `false` to disable search-result routing.
 
-Ordinary messages are sent through `vim.notify()` with error and warning levels preserved. `:messages` and `g<` use the built-in scrollable history window. These destinations are fixed; there are no `view`, `view_error`, `view_warn`, or `view_history` options.
+Ordinary messages are sent through `vim.notify()` with error and warning levels preserved. UI2 updates received before the scheduled flush are merged by message ID, `replace_last`, and `append`, so a file write sends only its final message. Notifications include a stable, namespaced `opts.id` for providers that support updates; providers that ignore it may show later updates as separate notifications. `:messages` and `g<` use the built-in scrollable history window. These destinations are fixed; there are no `view`, `view_error`, `view_warn`, or `view_history` options.
 
 Errors and warnings retain their log levels. Search counts are virtual text, not notifications. Configure their format, placement, and highlights with `messages.search_count`:
 

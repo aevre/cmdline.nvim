@@ -117,7 +117,7 @@ vim.opt.guicursor = {
 - `enabled`：启用 UI2 消息处理。
 - `view_search`：设为 `false` 可关闭搜索结果路由。
 
-普通消息通过 `vim.notify()` 发送，并保留错误和警告级别。`:messages` 和 `g<` 固定使用内置可滚动历史窗口。目标目前固定，没有 `view`、`view_error`、`view_warn` 或 `view_history` 配置项。
+普通消息通过 `vim.notify()` 发送，并保留错误和警告级别。在调度的 flush 执行前收到的 UI2 更新会按消息 ID、`replace_last` 和 `append` 合并，因此文件保存只转发最终消息。通知携带稳定且带命名空间的 `opts.id`，供支持更新的 provider 使用；忽略该字段的 provider 可能将后续更新显示为独立通知。`:messages` 和 `g<` 固定使用内置可滚动历史窗口。目标目前固定，没有 `view`、`view_error`、`view_warn` 或 `view_history` 配置项。
 
 错误和警告保留对应日志级别。搜索数量以虚拟文字显示，不作为通知发送。可通过 `messages.search_count` 配置格式、位置和高亮：
 
