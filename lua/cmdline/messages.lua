@@ -225,10 +225,7 @@ local function merge_message(messages, chunks, replace_last, append, id)
 	local message = index and messages[index]
 	if not message then
 		next_notification_id = next_notification_id + 1
-		message = {
-			notification_id = id ~= nil and ("cmdline.nvim:" .. type(id) .. ":" .. tostring(id))
-				or ("cmdline.nvim:message:" .. next_notification_id),
-		}
+		message = { notification_id = "cmdline.nvim:message:" .. next_notification_id }
 		messages[#messages + 1] = message
 	end
 	if append and not matching_id and message.chunks then
@@ -326,7 +323,12 @@ function M.handle(event, ...)
 		end
 		local kind, chunks = args[1], args[2]
 		local replace_last, append, id = args[3], args[5], args[6]
-		if kind == "search_cmd" or kind == "shell_cmd" then
+		if kind == "search_cmd" then
+			return
+		end
+		if kind == "shell_cmd" then
+			local previous = forwarded_messages[#forwarded_messages]
+			forwarded_messages = previous and { { notification_id = previous.notification_id } } or {}
 			return
 		end
 		if kind ~= "search_count" and kind ~= "confirm" and not should_notify_message(kind) then
