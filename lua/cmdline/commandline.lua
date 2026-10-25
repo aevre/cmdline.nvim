@@ -22,6 +22,7 @@ local cmdline_states = {}
 local cmdline_generation = 0
 local search_buf
 local command_block = {}
+local hide_next_prompt = false
 local special_char
 ---@type fun(): string Resolved context for the current command line.
 local view_name
@@ -46,12 +47,16 @@ end
 
 ---@return integer width Available width in columns.
 ---@return integer rows Available editor rows.
+local function view_position(view)
+	return current.hide_prompt and "top" or view.position
+end
+
 local function dimensions()
 	local view = active_view()
 	local opts = config.cmdline.opts
 	local width = view.width or opts.width
 	local cols = vim.o.columns
-	if view.position == "mini" then
+	if view_position(view) == "mini" then
 		return cols, vim.o.lines
 	end
 	local value_width = dimension(width.value, cols)
@@ -65,16 +70,17 @@ end
 ---@return integer row
 local function position(width, height, rows)
 	local view = active_view()
+	local placement = view_position(view)
 	local editor_rows = math.max(1, rows - vim.o.cmdheight)
-	if view.position == "mini" then
+	if placement == "mini" then
 		return 0, math.max(0, rows - height)
 	end
 	local available_x = math.max(0, vim.o.columns - width)
 	local available_y = math.max(0, editor_rows - height)
-	local x = view.position == "custom" and dimension(view.x, available_x) or math.floor(available_x / 2)
-	local y = view.position == "custom" and dimension(view.y, available_y)
-		or view.position == "top" and 4
-		or view.position == "bottom" and math.max(0, available_y - 3)
+	local x = placement == "custom" and dimension(view.x, available_x) or math.floor(available_x / 2)
+	local y = placement == "custom" and dimension(view.y, available_y)
+		or placement == "top" and 4
+		or placement == "bottom" and math.max(0, available_y - 3)
 		or math.floor(available_y / 2)
 	return math.max(0, math.min(available_x, x)), math.max(0, math.min(available_y, y))
 end
@@ -240,7 +246,7 @@ local function redraw_cmdline()
 		height = height,
 		border = view.border or config.cmdline.opts.border,
 	}
-	local title = view.position == "mini" and nil or format.title or view.title
+	local title = view_position(view) == "mini" and nil or format.title or view.title
 	win_config.title = title and (" " .. title .. " ") or ""
 	if title then
 		win_config.title_pos = "center"
@@ -251,8 +257,9 @@ local function redraw_cmdline()
 	end
 	local input_row = #block_lines
 	local lines
-	local icon = current.prompt ~= "" and "" or (format.icon or view.icon or "")
-	local prefix = current.prompt ~= "" and current.prompt or current.firstc
+	local prompt = current.hide_prompt and "" or current.prompt
+	local icon = prompt ~= "" and "" or (format.icon or view.icon or "")
+	local prefix = prompt ~= "" and prompt or current.firstc
 	local hidden = 0
 	if context == "lua" then
 		local original = input_lines[1]
@@ -281,7 +288,7 @@ local function redraw_cmdline()
 	end
 	lines = vim.list_extend(vim.deepcopy(block_lines), vim.deepcopy(input_lines))
 	if icon ~= "" then
-		prefix = icon .. " " .. (current.prompt ~= "" and current.prompt or "")
+		prefix = icon .. " " .. prompt
 	end
 	if prefix ~= "" then
 		lines[input_row + 1] = prefix .. string.rep(" ", current.indent or 0) .. lines[input_row + 1]
@@ -503,12 +510,14 @@ function M.handle(event, ...)
 		command_block = {}
 		current.chunks, current.pos, current.firstc = chunks, args[2], firstc
 		current.prompt, current.indent, current.level = prompt, args[5], level
+		current.hide_prompt, hide_next_prompt = hide_next_prompt, false
 		cmdline_states[level] = current
-		if active_view().position == "mini" and not mini_cmdheight then
+		local placement = view_position(active_view())
+		if placement == "mini" and not mini_cmdheight then
 			original_cmdheight = vim.o.cmdheight
 			vim.o.cmdheight = 1
 			mini_cmdheight = true
-		elseif active_view().position ~= "mini" then
+		elseif placement ~= "mini" then
 			restore_cmdheight()
 		end
 		vim.schedule(function()
@@ -562,7 +571,12 @@ function M.handle(event, ...)
 		cmdline_states = {}
 		clear_search_count()
 		restore_cmdheight()
-		vim.schedule(close_cmdline)
+		local generation = cmdline_generation
+		vim.schedule(function()
+			if generation == cmdline_generation then
+				close_cmdline()
+			end
+		end)
 		return true
 	elseif event == "cmdline_pos" then
 		if not config.cmdline.enabled then
@@ -802,6 +816,10 @@ end
 function M.configure(opts, namespace)
 	config, ns = opts, namespace
 	search_ns = vim.api.nvim_create_namespace("cmdline.search_count")
+end
+
+function M.hide_next_prompt()
+	hide_next_prompt = true
 end
 
 function M.teardown()

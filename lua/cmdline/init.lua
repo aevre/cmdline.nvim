@@ -13,9 +13,20 @@ M.close_history = messages.close_history
 ---@param event string UI2 event name dispatched by `vim.ui_attach()`.
 ---@return boolean? handled Whether the plugin consumed the event.
 local function handle(event, ...)
+	if event == "cmdline_show" then
+		local handled, hide_prompt = messages.handle(event, ...)
+		if handled then
+			return true
+		end
+		if hide_prompt then
+			commandline.hide_next_prompt()
+			return commandline.handle(event, ...)
+		end
+	end
 	local handled = commandline.handle(event, ...)
 	if event == "cmdline_hide" and handled then
 		vim.schedule(popupmenu.close)
+		messages.handle(event, ...)
 	end
 	if handled then
 		return handled

@@ -28,9 +28,12 @@ The canonical repository is hosted on Codeberg: <https://codeberg.org/aevre/cmdl
 ```lua
 {
   "https://codeberg.org/aevre/cmdline.nvim",
+  lazy = false,
   opts = {},
 }
 ```
+
+Load the plugin during startup, not from `VeryLazy` or a buffer event. Startup messages such as the swap-file `E325` prompt can occur before a lazily loaded plugin attaches to UI2.
 
 ## Configuration
 
@@ -301,7 +304,7 @@ require("cmdline").close_history()
 
 Call `require("cmdline").disable()` to detach UI2 and restore resources and `cmdheight` captured before setup. Passing both `cmdline.enabled = false` and `messages.enabled = false` to `setup()` does the same.
 
-Interactive confirmation prompts and return prompts remain native and are not routed through notifications.
+Interactive confirmation input and return prompts remain native. Confirmation text, including long swap-file warnings, is shown in a dedicated wrapped panel instead of being routed through notifications.
 
 ## UI2 ownership
 

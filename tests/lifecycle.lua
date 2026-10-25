@@ -577,20 +577,85 @@ assert(shell_error_visible and shell_stdout_visible and shell_status_visible)
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
-assert(dispatch("msg_show", "confirm", { { 0, "Save changes?" } }, false, false, false, 11))
+cmdline.setup({ cmdline = { opts = { presets = { input = { position = "middle" } } } } })
+local confirmation_notifications = {}
+local saved_confirmation_notify = vim.notify
+vim.notify = function(text)
+	confirmation_notifications[#confirmation_notifications + 1] = text
+end
+local confirmation = table.concat({
+	'E325: ATTENTION Found a swap file by the name ".file.lua.swp"',
+	"While opening file.lua",
+}, "\n")
+local confirmation_prompt =
+	"Open Read-Only ([O]), Edit anyway ((E)), Recover ((R)), Delete swap file ((D)), Quit ((Q)), Abort ((A)): "
+assert(dispatch("msg_show", "emsg", { { 0, "E325: ATTENTION" } }, false, false, false, 10))
+assert(dispatch("msg_show", "confirm", { { 0, confirmation } }, false, false, false, 11))
+assert(dispatch("cmdline_show", { { 0, "" } }, 0, "", confirmation_prompt, 0, 1))
 drain()
 local confirm_win
 for _, win in ipairs(vim.api.nvim_list_wins()) do
-	if vim.api.nvim_win_get_config(win).relative ~= "" then
+	local opts = vim.api.nvim_win_get_config(win)
+	if vim.inspect(opts.title):find("Confirm", 1, true) then
 		confirm_win = win
 	end
 end
-assert(confirm_win)
+assert(confirm_win and vim.wo[confirm_win].wrap)
+local confirm_config = vim.api.nvim_win_get_config(confirm_win)
+assert(confirm_config.width < vim.o.columns and confirm_config.height >= 4)
 local confirm_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(confirm_win), 0, -1, false)
-assert(table.concat(confirm_lines, "\n"):find("Save changes?", 1, true))
+assert(table.concat(confirm_lines, "\n", 1, 2) == confirmation)
+assert(confirm_lines[3] == "")
+assert(confirm_lines[4] == confirmation_prompt)
+assert(#confirmation_notifications == 0)
+vim.notify = saved_confirmation_notify
+local confirmation_input_visible = false
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if has_title(win, "Input") then
+		local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+		confirmation_input_visible = true
+		assert(vim.api.nvim_win_get_config(win).row == 4)
+		assert(not table.concat(lines, "\n"):find(confirmation_prompt, 1, true))
+	end
+end
+assert(confirmation_input_visible)
+assert(dispatch("cmdline_hide", 1, true))
+local empty_notifications = {}
+vim.notify = function(text)
+	empty_notifications[#empty_notifications + 1] = text
+end
+assert(dispatch("msg_show", "", { { 0, "\n" } }, false, false, false, 12))
+drain()
+assert(#empty_notifications == 0)
+vim.notify = saved_confirmation_notify
+local return_prompt = "Press ENTER or type command to continue"
+assert(dispatch("cmdline_show", { { 0, "" } }, 0, "", return_prompt, 0, 1))
+drain()
+assert(not vim.api.nvim_win_is_valid(confirm_win))
+local return_prompt_visible = false
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	if table.concat(lines, "\n"):find(return_prompt, 1, true) ~= nil then
+		return_prompt_visible = true
+		assert(vim.api.nvim_win_get_config(win).row > 4)
+	end
+end
+assert(return_prompt_visible)
+assert(dispatch("cmdline_hide", 1, false))
+drain()
+assert(dispatch("msg_show", "confirm", { { 0, "Save changes?" } }, true, false, false, 11))
+drain()
+assert(not vim.api.nvim_win_is_valid(confirm_win))
+local replacement_visible = false
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+	replacement_visible = replacement_visible or table.concat(lines, "\n") == "Save changes?"
+end
+assert(replacement_visible)
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
+cmdline.setup()
 assert(dispatch("msg_show", "future_kind", { { 0, "unknown message" } }, false, false, false, 12))
 drain()
 local unknown_visible = false

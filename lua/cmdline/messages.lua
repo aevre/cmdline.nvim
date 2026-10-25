@@ -74,6 +74,8 @@ local function show_history(entries)
 end
 
 local notification_buf, notification_win
+local confirmation_buf, confirmation_win
+local confirmation_chunks, confirmation_prompt
 local notification_timer
 local notification_ns = vim.api.nvim_create_namespace("cmdline.messages")
 local visible_messages = {}
@@ -93,6 +95,49 @@ local function clear_notification()
 	notification_win, notification_buf = close(notification_win, notification_buf)
 	visible_messages = {}
 	persistent_notification = false
+end
+
+local function close_confirmation()
+	confirmation_win, confirmation_buf = close(confirmation_win, confirmation_buf)
+end
+
+local function clear_confirmation()
+	confirmation_chunks, confirmation_prompt = nil, nil
+	close_confirmation()
+end
+
+local function render_confirmation()
+	confirmation_win, confirmation_buf = close(confirmation_win, confirmation_buf)
+	local lines = chunks_text(confirmation_chunks)
+	if confirmation_prompt and confirmation_prompt ~= "" then
+		lines[#lines + 1] = ""
+		lines[#lines + 1] = confirmation_prompt
+	end
+	local width = math.max(1, math.min(vim.o.columns - 4, math.floor(vim.o.columns * 0.8)))
+	local height = 0
+	for _, line in ipairs(lines) do
+		height = height + math.max(1, math.ceil(vim.fn.strdisplaywidth(line) / width))
+	end
+	height = math.max(1, math.min(height, vim.o.lines - 4))
+	confirmation_buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(confirmation_buf, 0, -1, false, lines)
+	vim.bo[confirmation_buf].modifiable = false
+	vim.bo[confirmation_buf].bufhidden = "wipe"
+	confirmation_win = vim.api.nvim_open_win(confirmation_buf, false, {
+		relative = "editor",
+		row = math.max(0, math.floor((vim.o.lines - height) / 2)),
+		col = math.max(0, math.floor((vim.o.columns - width) / 2)),
+		width = width,
+		height = height,
+		style = "minimal",
+		border = config.cmdline.opts.border,
+		title = " Confirm ",
+		title_pos = "center",
+		focusable = false,
+		zindex = 190,
+	})
+	vim.wo[confirmation_win].wrap = true
+	vim.wo[confirmation_win].winhighlight = "Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle"
 end
 
 local function render_notifications()
@@ -269,7 +314,13 @@ end
 ---@return boolean? Whether this module handled the event.
 function M.handle(event, ...)
 	local args = { ... }
-	if event == "msg_show" then
+	if event == "cmdline_show" and confirmation_chunks then
+		local prompt = args[4]
+		if not confirmation_prompt and prompt and prompt ~= "" then
+			confirmation_prompt = prompt
+			return false, true
+		end
+	elseif event == "msg_show" then
 		if not config.messages.enabled then
 			return
 		end
@@ -284,6 +335,9 @@ function M.handle(event, ...)
 		if kind == "search_count" then
 			return
 		end
+		if not append and not replace_last and table.concat(chunks_text(chunks), "\n"):match("%S") == nil then
+			return true
+		end
 		-- shortcut: guards synchronous echo fallbacks; deferred echo providers need explicit routing.
 		if forwarding_message then
 			local scheduled_generation = generation
@@ -295,10 +349,13 @@ function M.handle(event, ...)
 			return true
 		end
 		if kind == "confirm" then
+			pending_messages = {}
+			confirmation_chunks, confirmation_prompt = chunks, nil
 			local scheduled_generation = generation
 			vim.schedule(function()
-				if scheduled_generation == generation and config.messages.enabled then
-					update_notification(chunks, replace_last, append, id, true)
+				if scheduled_generation == generation and config.messages.enabled and confirmation_chunks then
+					clear_notification()
+					render_confirmation()
 				end
 			end)
 			return true
@@ -340,6 +397,11 @@ function M.handle(event, ...)
 			end
 			return true
 		end
+	elseif event == "cmdline_hide" and confirmation_chunks then
+		generation = generation + 1
+		confirmation_chunks, confirmation_prompt = nil, nil
+		vim.schedule(close_confirmation)
+		return true
 	elseif event == "msg_history_show" then
 		if not config.messages.enabled then
 			return
@@ -360,7 +422,10 @@ function M.handle(event, ...)
 		else
 			generation = generation + 1
 			pending_messages, forwarded_messages, flush_scheduled = {}, {}, false
-			vim.schedule(clear_notification)
+			vim.schedule(function()
+				clear_notification()
+				clear_confirmation()
+			end)
 		end
 		return true
 	end
@@ -376,6 +441,7 @@ function M.close()
 	pending_messages, forwarded_messages, flush_scheduled = {}, {}, false
 	close_history()
 	clear_notification()
+	clear_confirmation()
 end
 
 M.close_history = close_history

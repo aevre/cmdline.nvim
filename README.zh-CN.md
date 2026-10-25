@@ -28,9 +28,12 @@ Canonical 仓库位于 Codeberg：<https://codeberg.org/aevre/cmdline.nvim>。
 ```lua
 {
   "https://codeberg.org/aevre/cmdline.nvim",
+  lazy = false,
   opts = {},
 }
 ```
+
+请在启动阶段加载插件，不要使用 `VeryLazy` 或缓冲区事件延迟加载。交换文件 `E325` 等启动消息可能在延迟加载的插件挂载 UI2 之前发生。
 
 ## 配置
 
@@ -301,7 +304,7 @@ require("cmdline").close_history()
 
 调用 `require("cmdline").disable()` 会解除 UI2 挂载、清理资源，并恢复 setup 前保存的 `cmdheight`。在 `setup()` 中同时设置 `cmdline.enabled = false` 和 `messages.enabled = false` 也会执行相同清理。
 
-交互式确认 prompt 和 return prompt 保持原生行为，不会被路由到通知。
+交互式确认输入和 return prompt 保持原生行为。确认文本（包括较长的交换文件警告）会显示在独立的自动换行面板中，而不会被路由到通知。
 
 ## UI2 所有权
 
