@@ -23,11 +23,11 @@
 
 ## 安装
 
-Canonical 仓库位于 Codeberg：<https://codeberg.org/aevre/cmdline.nvim>。
+同时托管于 Codeberg：<https://codeberg.org/aevre/cmdline.nvim> 和 GitHub：<https://github.com/aevre/cmdline.nvim>。
 
 ```lua
 {
-  "https://codeberg.org/aevre/cmdline.nvim",
+  "https://github.com/aevre/cmdline.nvim",
   lazy = false,
   opts = {},
 }
@@ -160,7 +160,7 @@ messages = {
 
 ```lua
 {
-  "https://codeberg.org/aevre/cmdline.nvim",
+  "https://github.com/aevre/cmdline.nvim",
   opts = {
     cmdline = {
       extensions = {

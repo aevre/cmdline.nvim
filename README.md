@@ -23,11 +23,11 @@ A small Neovim 0.12+ command-line UI built on native UI2 and `vim.ui_attach()`.
 
 ## Installation
 
-The canonical repository is hosted on Codeberg: <https://codeberg.org/aevre/cmdline.nvim>.
+Available on Codeberg: <https://codeberg.org/aevre/cmdline.nvim> and GitHub: <https://github.com/aevre/cmdline.nvim>.
 
 ```lua
 {
-  "https://codeberg.org/aevre/cmdline.nvim",
+  "https://github.com/aevre/cmdline.nvim",
   lazy = false,
   opts = {},
 }
@@ -160,7 +160,7 @@ Add extensions in the plugin's normal `setup()` options. For example, this `lazy
 
 ```lua
 {
-  "https://codeberg.org/aevre/cmdline.nvim",
+  "https://github.com/aevre/cmdline.nvim",
   opts = {
     cmdline = {
       extensions = {
