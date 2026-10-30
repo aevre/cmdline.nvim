@@ -308,7 +308,7 @@ end
 
 ---@param event string UI2 event name.
 ---@param ... any Event payload for the selected message event.
----@return boolean? Whether this module handled the event.
+---@return boolean?, boolean? Whether the event was handled and whether the next prompt should be hidden.
 function M.handle(event, ...)
 	local args = { ... }
 	if event == "cmdline_show" and confirmation_chunks then

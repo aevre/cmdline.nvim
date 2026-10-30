@@ -3,4 +3,6 @@ if vim.g.loaded_cmdline_nvim then
 end
 vim.g.loaded_cmdline_nvim = true
 
-require("cmdline").setup()
+---@type cmdline.Module
+local cmdline = require("cmdline")
+cmdline.setup()

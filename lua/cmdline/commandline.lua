@@ -45,10 +45,10 @@ local function dimension(value, total)
 	return tonumber(value) or 0
 end
 
----@return integer width Available width in columns.
----@return integer rows Available editor rows.
+---@param view cmdline.View
+---@return cmdline.Position placement
 local function view_position(view)
-	return current.hide_prompt and "top" or view.position
+	return current.hide_prompt and "top" or view.position or "middle"
 end
 
 local function dimensions()
