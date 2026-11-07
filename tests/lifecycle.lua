@@ -163,29 +163,10 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 end
 assert(dispatch("cmdline_show", { { { foreground = 0xff0000 }, "abc", 77 } }, 1, "", ">", 0, 1))
 assert(dispatch("cmdline_special_char", string.char(22), true, 1))
-assert(dispatch("cmdline_show", { { { foreground = 0xff0000 }, "abc", 77 } }, 1, "", ">", 0, 1))
-assert(dispatch("cmdline_block_show", { { { { bold = true }, "function Foo()", 78 } } }))
-assert(dispatch("cmdline_block_append", { { { italic = true }, "  echo 'foo'", 79 } }))
+assert(dispatch("cmdline_pos", 2, 1))
 drain()
-local rendered = vim.api.nvim_buf_get_lines(cmd_buf, 0, -1, false)
-assert(rendered[1] == "function Foo()" and rendered[2] == "  echo 'foo'")
-assert(rendered[3] == ">abc")
 local cmd_marks =
 	vim.api.nvim_buf_get_extmarks(cmd_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
-local has_special, has_chunk_hl = false, false
-for _, mark in ipairs(cmd_marks) do
-	local details = mark[4]
-	has_special = has_special or details.virt_text ~= nil
-	has_chunk_hl = has_chunk_hl or details.hl_group ~= nil
-end
-assert(has_special and has_chunk_hl)
-local chunk_group
-for _, mark in ipairs(cmd_marks) do
-	if mark[4].hl_group then
-		chunk_group = mark[4].hl_group
-	end
-end
-assert(chunk_group and vim.api.nvim_get_hl(0, { name = chunk_group }).fg == 0xff0000)
 local special_text
 for _, mark in ipairs(cmd_marks) do
 	if mark[4].virt_text then
@@ -193,6 +174,29 @@ for _, mark in ipairs(cmd_marks) do
 	end
 end
 assert(special_text == "^V")
+assert(dispatch("cmdline_show", { { { foreground = 0xff0000 }, "abc", 77 } }, 1, "", ">", 0, 1))
+assert(dispatch("cmdline_block_show", { { { { bold = true }, "function Foo()", 78 } } }))
+assert(dispatch("cmdline_block_append", { { { italic = true }, "  echo 'foo'", 79 } }))
+drain()
+local rendered = vim.api.nvim_buf_get_lines(cmd_buf, 0, -1, false)
+assert(rendered[1] == "function Foo()" and rendered[2] == "  echo 'foo'")
+assert(rendered[3] == ">abc")
+cmd_marks =
+	vim.api.nvim_buf_get_extmarks(cmd_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+local has_special, has_chunk_hl = false, false
+for _, mark in ipairs(cmd_marks) do
+	local details = mark[4]
+	has_special = has_special or details.virt_text ~= nil
+	has_chunk_hl = has_chunk_hl or details.hl_group ~= nil
+end
+assert(not has_special and has_chunk_hl)
+local chunk_group
+for _, mark in ipairs(cmd_marks) do
+	if mark[4].hl_group then
+		chunk_group = mark[4].hl_group
+	end
+end
+assert(chunk_group and vim.api.nvim_get_hl(0, { name = chunk_group }).fg == 0xff0000)
 assert(dispatch("cmdline_show", { { 0, 'echo "hi"' } }, 8, ":", "", 0, 1))
 drain()
 local vim_buf = vim.api.nvim_win_get_buf(cmd_win)

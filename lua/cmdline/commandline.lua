@@ -488,17 +488,7 @@ function M.handle(event, ...)
 		if current.active then
 			cmdline_states[current.level] = current
 		end
-		if
-			special_char
-			and (
-				special_char.level ~= level
-				or special_char.firstc ~= firstc
-				or special_char.prompt ~= prompt
-				or special_char.content ~= table.concat(chunks_text(chunks))
-			)
-		then
-			special_char = nil
-		end
+		special_char = nil
 		cmdline_generation = cmdline_generation + 1
 		local generation = cmdline_generation
 		local state = cmdline_states[level] or {}
@@ -589,7 +579,6 @@ function M.handle(event, ...)
 			state.pos = args[1] or state.pos
 		end
 		if current.level == level then
-			special_char = nil
 			vim.schedule(redraw_cmdline)
 		end
 		return true
@@ -607,9 +596,6 @@ function M.handle(event, ...)
 			char = char,
 			shift = shift,
 			level = level,
-			firstc = state.firstc,
-			prompt = state.prompt,
-			content = table.concat(chunks_text(state.chunks)),
 		}
 		if current.level == level then
 			local generation = cmdline_generation
