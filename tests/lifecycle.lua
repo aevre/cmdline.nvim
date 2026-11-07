@@ -524,39 +524,25 @@ assert(dispatch("msg_show", "search_cmd", { { 0, "/foo" } }, false, false, false
 assert(dispatch("msg_show", "emsg", { { 0, "E486: Pattern not found: foo", error_hl } }, false, false, false))
 drain()
 assert(#received_search_failure == 1 and received_search_failure[1].text:find("E486", 1, true))
+assert(#vim.api.nvim_list_wins() == baseline)
 vim.notify = original_search_notify
+local ordinary_messages = {}
+local saved_ordinary_notify = vim.notify
+vim.notify = function(text, level, opts)
+	ordinary_messages[#ordinary_messages + 1] = { text, level, opts }
+end
 assert(dispatch("msg_show", "emsg", { { 0, "first\nsecond", error_hl } }, false, true, false, 7))
 drain()
-assert(#vim.api.nvim_list_wins() == baseline + 1)
-local notification_buf
-for _, win in ipairs(vim.api.nvim_list_wins()) do
-	local buf = vim.api.nvim_win_get_buf(win)
-	local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-	if table.concat(lines, "\n") == "first\nsecond" then
-		notification_buf = buf
-	end
-end
-assert(notification_buf)
-local notification_marks = vim.api.nvim_buf_get_extmarks(
-	notification_buf,
-	vim.api.nvim_get_namespaces()["cmdline.messages"],
-	0,
-	-1,
-	{ details = true }
-)
-assert(#notification_marks == 2 and notification_marks[1][4].hl_group == "ErrorMsg")
+assert(#ordinary_messages == 1 and ordinary_messages[1][1] == "first\nsecond")
+assert(ordinary_messages[1][2] == vim.log.levels.ERROR and ordinary_messages[1][3].id)
+assert(#vim.api.nvim_list_wins() == baseline)
 assert(dispatch("msg_show", "echo", { { 0, "second" } }, false, true, false, 10))
 assert(dispatch("msg_show", "echo", { { 0, " tail" } }, false, true, true, 8))
 assert(dispatch("msg_show", "echo", { { 0, "replacement" } }, true, true, false, 9))
 assert(dispatch("msg_show", "progress", { { 0, "updated first" } }, false, false, false, 7))
 drain()
-for _, win in ipairs(vim.api.nvim_list_wins()) do
-	if vim.api.nvim_win_get_config(win).relative ~= "" then
-		notification_buf = vim.api.nvim_win_get_buf(win)
-	end
-end
-local updated_lines = vim.api.nvim_buf_get_lines(notification_buf, 0, -1, false)
-assert(table.concat(updated_lines, "\n") == "updated first\nreplacement", vim.inspect(updated_lines))
+assert(#ordinary_messages >= 2)
+assert(vim.inspect(ordinary_messages):find("updated first", 1, true), vim.inspect(ordinary_messages))
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
@@ -565,15 +551,11 @@ assert(dispatch("msg_show", "shell_out", { { 0, "shell stdout" } }, false, false
 assert(dispatch("msg_show", "shell_ret", { { 0, "shell status" } }, false, false, false, 16))
 assert(dispatch("msg_show", "shell_cmd", { { 0, "shell command" } }, false, false, false, 17) == nil)
 drain()
-local shell_error_visible, shell_stdout_visible, shell_status_visible = false, false, false
-for _, win in ipairs(vim.api.nvim_list_wins()) do
-	local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
-	local text = table.concat(lines, "\n")
-	shell_error_visible = shell_error_visible or text:find("shell stderr", 1, true) ~= nil
-	shell_stdout_visible = shell_stdout_visible or text:find("shell stdout", 1, true) ~= nil
-	shell_status_visible = shell_status_visible or text:find("shell status", 1, true) ~= nil
-end
-assert(shell_error_visible and shell_stdout_visible and shell_status_visible)
+assert(#ordinary_messages >= 5)
+assert(ordinary_messages[#ordinary_messages - 2][1] == "shell stderr")
+assert(ordinary_messages[#ordinary_messages - 1][1] == "shell stdout")
+assert(ordinary_messages[#ordinary_messages][1] == "shell status")
+vim.notify = saved_ordinary_notify
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
@@ -590,6 +572,9 @@ local confirmation = table.concat({
 local confirmation_prompt =
 	"Open Read-Only ([O]), Edit anyway ((E)), Recover ((R)), Delete swap file ((D)), Quit ((Q)), Abort ((A)): "
 assert(dispatch("msg_show", "emsg", { { 0, "E325: ATTENTION" } }, false, false, false, 10))
+drain()
+assert(#confirmation_notifications == 1 and confirmation_notifications[1]:find("E325", 1, true))
+confirmation_notifications = {}
 assert(dispatch("msg_show", "confirm", { { 0, confirmation } }, false, false, false, 11))
 assert(dispatch("cmdline_show", { { 0, "" } }, 0, "", confirmation_prompt, 0, 1))
 drain()
@@ -656,14 +641,15 @@ assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
 cmdline.setup()
+local unknown_messages = {}
+local saved_unknown_notify = vim.notify
+vim.notify = function(text)
+	unknown_messages[#unknown_messages + 1] = text
+end
 assert(dispatch("msg_show", "future_kind", { { 0, "unknown message" } }, false, false, false, 12))
 drain()
-local unknown_visible = false
-for _, win in ipairs(vim.api.nvim_list_wins()) do
-	local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
-	unknown_visible = unknown_visible or table.concat(lines, "\n"):find("unknown message", 1, true) ~= nil
-end
-assert(unknown_visible)
+assert(#unknown_messages == 1 and unknown_messages[1] == "unknown message")
+vim.notify = saved_unknown_notify
 assert(dispatch("msg_clear"))
 drain()
 local saved_notify = vim.notify

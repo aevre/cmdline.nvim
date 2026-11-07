@@ -25,7 +25,9 @@ assert(extensions.resolve(config, { firstc = ":", chunks = {}, prompt = "" }, { 
 assert(extensions.resolve(config, { firstc = "", chunks = {}, prompt = "File already open: " }, { "" }) == "file")
 assert(extensions.resolve(config, { firstc = "", chunks = {}, prompt = "Enter value: " }, { "" }) == "input")
 local native_notify = vim.notify
+local original_cmdheight = vim.o.cmdheight
 cmdline.setup()
+assert(vim.o.cmdheight == 0)
 local function visible(text)
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
 		if vim.api.nvim_win_get_config(win).relative ~= "" then
@@ -42,16 +44,7 @@ assert(vim.wait(500, function()
 	return visible("native notification")
 end))
 assert(vim.notify == native_notify)
-for _, win in ipairs(vim.api.nvim_list_wins()) do
-	local opts = vim.api.nvim_win_get_config(win)
-	if opts.relative == "editor" then
-		assert(opts.col == 0 and opts.width == vim.o.columns)
-		assert(opts.row == vim.o.lines - vim.o.cmdheight - opts.height)
-		assert(opts.border == nil or opts.border == "none")
-		assert(not opts.focusable and opts.title == nil)
-		assert(vim.wo[win].winhighlight == "Normal:MsgArea,EndOfBuffer:MsgArea")
-	end
-end
+assert(vim.o.cmdheight >= 1)
 vim.cmd.messages()
 assert(vim.wait(500, function()
 	return vim.api.nvim_win_get_config(0).relative ~= ""
@@ -59,6 +52,9 @@ end))
 assert(visible("native notification"))
 cmdline.close_history()
 assert(vim.api.nvim_win_get_config(0).relative == "")
+cmdline.disable()
+assert(vim.o.cmdheight == original_cmdheight)
+cmdline.setup()
 
 local received = {}
 vim.notify = function(text, level, opts)
@@ -80,13 +76,16 @@ end
 vim.api.nvim_echo({ { "[3/10]" } }, false, { kind = "search_count" })
 vim.wait(50)
 assert(#received == 0)
-vim.notify = function(text, level)
-	native_notify(text, level)
+local wrapped = 0
+vim.notify = function()
+	wrapped = wrapped + 1
 end
 vim.cmd('echo "wrapped notification"')
 assert(vim.wait(500, function()
-	return visible("wrapped notification")
+	return wrapped == 1
 end))
+assert(not visible("wrapped notification"))
 vim.notify = native_notify
-vim.ui_detach(vim.api.nvim_create_namespace("cmdline.nvim"))
+cmdline.disable()
+assert(vim.o.cmdheight == original_cmdheight)
 print("cmdline.nvim smoke: ok")

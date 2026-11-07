@@ -7,6 +7,7 @@ local messages = require("cmdline.messages")
 local ns
 local attached = false
 local original_cmdheight
+local default_notify
 
 M.close_history = messages.close_history
 
@@ -55,7 +56,8 @@ function M.setup(opts)
 	local config = config_module.merge(opts)
 	commandline.configure(config, ns)
 	popupmenu.configure(config)
-	messages.configure(config)
+	default_notify = default_notify or vim.notify
+	messages.configure(config, default_notify)
 	if not config.cmdline.enabled and not config.messages.enabled then
 		return M.disable()
 	end

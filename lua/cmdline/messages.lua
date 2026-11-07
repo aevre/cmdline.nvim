@@ -2,6 +2,7 @@ local M = {}
 local ui = require("cmdline.ui")
 local valid_win, close, chunks_text = ui.valid_win, ui.close, ui.chunks_text
 local config
+local default_notify
 local history_buf
 local history_win
 local history_prev_win
@@ -77,9 +78,9 @@ local notification_buf, notification_win
 local confirmation_buf, confirmation_win
 local confirmation_chunks, confirmation_prompt
 local notification_timer
+local notification_cmdheight
 local notification_ns = vim.api.nvim_create_namespace("cmdline.messages")
 local visible_messages = {}
-local persistent_notification = false
 local generation = 0
 local forwarded_messages = {}
 local pending_messages = {}
@@ -94,7 +95,10 @@ local function clear_notification()
 	end
 	notification_win, notification_buf = close(notification_win, notification_buf)
 	visible_messages = {}
-	persistent_notification = false
+	if notification_cmdheight ~= nil then
+		vim.o.cmdheight = notification_cmdheight
+		notification_cmdheight = nil
+	end
 end
 
 local function close_confirmation()
@@ -140,72 +144,6 @@ local function render_confirmation()
 	vim.wo[confirmation_win].winhighlight = "Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle"
 end
 
-local function render_notifications()
-	if notification_timer then
-		notification_timer:stop()
-		notification_timer:close()
-		notification_timer = nil
-	end
-	notification_win, notification_buf = close(notification_win, notification_buf)
-	local chunks = {}
-	for index, message in ipairs(visible_messages) do
-		if index > 1 then
-			chunks[#chunks + 1] = { 0, "\n" }
-		end
-		vim.list_extend(chunks, message.chunks)
-	end
-	if #chunks == 0 then
-		return
-	end
-	local lines = chunks_text(chunks)
-	local width = vim.o.columns
-	local height = 0
-	for _, line in ipairs(lines) do
-		height = height + math.max(1, math.ceil(vim.fn.strdisplaywidth(line) / width))
-	end
-	height = math.min(height, math.max(1, math.floor(vim.o.lines / 2)))
-	notification_buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(notification_buf, 0, -1, false, lines)
-	vim.bo[notification_buf].modifiable = false
-	vim.bo[notification_buf].bufhidden = "wipe"
-	notification_win = vim.api.nvim_open_win(notification_buf, false, {
-		relative = "editor",
-		row = math.max(0, vim.o.lines - vim.o.cmdheight - height),
-		col = 0,
-		width = width,
-		height = height,
-		style = "minimal",
-		border = "none",
-		focusable = false,
-		zindex = 200,
-	})
-	vim.wo[notification_win].wrap = true
-	vim.wo[notification_win].winhighlight = "Normal:MsgArea,EndOfBuffer:MsgArea"
-	vim.wo[notification_win].winblend = 0
-	local row, col = 0, 0
-	for _, chunk in ipairs(chunks) do
-		local parts = vim.split(chunk[2], "\n", { plain = true })
-		for i, part in ipairs(parts) do
-			if i > 1 then
-				row, col = row + 1, 0
-			end
-			if chunk[3] and chunk[3] > 0 and #part > 0 then
-				vim.api.nvim_buf_set_extmark(notification_buf, notification_ns, row, col, {
-					end_col = col + #part,
-					hl_group = chunk[3],
-				})
-			end
-			col = col + #part
-		end
-	end
-	if not persistent_notification then
-		notification_timer = vim.defer_fn(function()
-			notification_timer = nil
-			clear_notification()
-		end, 4000)
-	end
-end
-
 local forwarding_message = false
 
 local function merge_message(messages, chunks, replace_last, append, id)
@@ -239,8 +177,75 @@ local function merge_message(messages, chunks, replace_last, append, id)
 	return message
 end
 
-local function update_notification(chunks, replace_last, append, id, persistent)
-	persistent_notification = persistent or false
+local function render_notifications()
+	if notification_timer then
+		notification_timer:stop()
+		notification_timer:close()
+		notification_timer = nil
+	end
+	notification_win, notification_buf = close(notification_win, notification_buf)
+	local chunks = {}
+	for index, message in ipairs(visible_messages) do
+		if index > 1 then
+			chunks[#chunks + 1] = { 0, "\n" }
+		end
+		vim.list_extend(chunks, message.chunks)
+	end
+	if #chunks == 0 then
+		return
+	end
+	local lines = chunks_text(chunks)
+	local width = vim.o.columns
+	local height = 0
+	for _, line in ipairs(lines) do
+		height = height + math.max(1, math.ceil(vim.fn.strdisplaywidth(line) / width))
+	end
+	height = math.min(height, math.max(1, math.floor(vim.o.lines / 2)))
+	if notification_cmdheight == nil then
+		notification_cmdheight = vim.o.cmdheight
+	end
+	vim.o.cmdheight = math.max(notification_cmdheight, height)
+	notification_buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(notification_buf, 0, -1, false, lines)
+	vim.bo[notification_buf].modifiable = false
+	vim.bo[notification_buf].bufhidden = "wipe"
+	notification_win = vim.api.nvim_open_win(notification_buf, false, {
+		relative = "editor",
+		row = math.max(0, vim.o.lines - height),
+		col = 0,
+		width = width,
+		height = height,
+		style = "minimal",
+		border = "none",
+		focusable = false,
+		zindex = 200,
+	})
+	vim.wo[notification_win].wrap = true
+	vim.wo[notification_win].winhighlight = "Normal:MsgArea,EndOfBuffer:MsgArea"
+	vim.wo[notification_win].winblend = 0
+	local row, col = 0, 0
+	for _, chunk in ipairs(chunks) do
+		local parts = vim.split(chunk[2], "\n", { plain = true })
+		for i, part in ipairs(parts) do
+			if i > 1 then
+				row, col = row + 1, 0
+			end
+			if chunk[3] and chunk[3] > 0 and #part > 0 then
+				vim.api.nvim_buf_set_extmark(notification_buf, notification_ns, row, col, {
+					end_col = col + #part,
+					hl_group = chunk[3],
+				})
+			end
+			col = col + #part
+		end
+	end
+	notification_timer = vim.defer_fn(function()
+		notification_timer = nil
+		clear_notification()
+	end, 4000)
+end
+
+local function update_notification(chunks, replace_last, append, id)
 	merge_message(visible_messages, chunks, replace_last, append, id)
 	render_notifications()
 end
@@ -340,14 +345,7 @@ function M.handle(event, ...)
 		if not append and not replace_last and table.concat(chunks_text(chunks), "\n"):match("%S") == nil then
 			return true
 		end
-		-- shortcut: guards synchronous echo fallbacks; deferred echo providers need explicit routing.
 		if forwarding_message then
-			local scheduled_generation = generation
-			vim.schedule(function()
-				if scheduled_generation == generation and config.messages.enabled then
-					update_notification(chunks, replace_last, append, id)
-				end
-			end)
 			return true
 		end
 		if kind == "confirm" then
@@ -356,7 +354,6 @@ function M.handle(event, ...)
 			local scheduled_generation = generation
 			vim.schedule(function()
 				if scheduled_generation == generation and config.messages.enabled and confirmation_chunks then
-					clear_notification()
 					render_confirmation()
 				end
 			end)
@@ -377,8 +374,7 @@ function M.handle(event, ...)
 					end
 					local pending = pending_messages
 					pending_messages, flush_scheduled = {}, false
-					local source = type(vim.notify) == "function" and debug.getinfo(vim.notify, "S").source or ""
-					local native = source == "vim/_core/editor" or source == "@vim/_editor.lua"
+					local native = vim.notify == default_notify
 					local dirty = {}
 					for _, item in ipairs(pending) do
 						if native then
@@ -390,9 +386,11 @@ function M.handle(event, ...)
 							dirty[message] = true
 						end
 					end
-					for _, message in ipairs(forwarded_messages) do
-						if dirty[message] then
-							notify_message(message)
+					if not native then
+						for _, message in ipairs(forwarded_messages) do
+							if dirty[message] then
+								notify_message(message)
+							end
 						end
 					end
 				end)
@@ -434,8 +432,10 @@ function M.handle(event, ...)
 end
 
 ---@param opts cmdline.ResolvedConfig Complete merged plugin configuration.
-function M.configure(opts)
+---@param notify function Default notification provider captured during setup.
+function M.configure(opts, notify)
 	config = opts
+	default_notify = notify
 end
 
 function M.close()
