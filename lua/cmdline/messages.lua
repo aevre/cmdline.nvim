@@ -82,6 +82,13 @@ end
 local notification_buf, notification_win
 local confirmation_buf, confirmation_win
 local confirmation_chunks, confirmation_prompt
+local confirmation_key_ns = vim.api.nvim_create_namespace("cmdline.confirmation")
+local confirmation_scroll = {
+	["<C-D>"] = [[\<C-F>]],
+	["<C-U>"] = [[\<C-B>]],
+	["<ScrollWheelDown>"] = [[\<C-E>]],
+	["<ScrollWheelUp>"] = [[\<C-Y>]],
+}
 local notification_timer
 local notification_cmdheight
 local notification_ns = vim.api.nvim_create_namespace("cmdline.messages")
@@ -107,7 +114,30 @@ clear_notification = function()
 end
 
 local function close_confirmation()
+	vim.on_key(nil, confirmation_key_ns)
 	confirmation_win, confirmation_buf = close(confirmation_win, confirmation_buf)
+end
+
+local function handle_confirmation_key(typed)
+	local key = vim.fn.keytrans(typed)
+	local command = confirmation_scroll[key]
+	if key:find("ScrollWheel", 1, true) then
+		command = (tonumber(vim.o.mousescroll:match("ver:(%d+)")) or 3) .. command
+	end
+	if not command or not valid_win(confirmation_win) then
+		return
+	end
+	local before = vim.fn.getwininfo(confirmation_win)[1]
+	vim.fn.win_execute(confirmation_win, ('exe "norm! %s"'):format(command))
+	local after = vim.fn.getwininfo(confirmation_win)[1]
+	if before and after and after.topline ~= before.topline then
+		vim.api.nvim__redraw({ flush = true, win = confirmation_win })
+	end
+	return ""
+end
+
+local function confirmation_on_key(_, typed)
+	return handle_confirmation_key(typed)
 end
 
 local function clear_confirmation()
@@ -127,7 +157,7 @@ local function render_confirmation()
 	for _, line in ipairs(lines) do
 		height = height + math.max(1, math.ceil(vim.fn.strdisplaywidth(line) / width))
 	end
-	height = math.max(1, math.min(height, vim.o.lines - 4))
+	height = math.max(1, math.min(height, math.floor(vim.o.lines / 2), vim.o.lines - 4))
 	confirmation_buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_buf_set_lines(confirmation_buf, 0, -1, false, lines)
 	vim.bo[confirmation_buf].modifiable = false
@@ -143,10 +173,14 @@ local function render_confirmation()
 		title = " Confirm ",
 		title_pos = "center",
 		focusable = false,
+		mouse = true,
 		zindex = 190,
 	})
 	vim.wo[confirmation_win].wrap = true
 	vim.wo[confirmation_win].winhighlight = "Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle"
+	if vim.api.nvim_buf_line_count(confirmation_buf) > height then
+		vim.on_key(confirmation_on_key, confirmation_key_ns)
+	end
 end
 
 local forwarding_message = false

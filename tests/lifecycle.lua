@@ -603,6 +603,8 @@ end
 local confirmation = table.concat({
 	'E325: ATTENTION Found a swap file by the name ".file.lua.swp"',
 	"While opening file.lua",
+	string.rep("Details about the existing swap file.\n", 12),
+	string.rep("Review recovery options before continuing.\n", 12),
 }, "\n")
 local confirmation_prompt =
 	"Open Read-Only ([O]), Edit anyway ((E)), Recover ((R)), Delete swap file ((D)), Quit ((Q)), Abort ((A)): "
@@ -623,10 +625,27 @@ end
 assert(confirm_win and vim.wo[confirm_win].wrap)
 local confirm_config = vim.api.nvim_win_get_config(confirm_win)
 assert(confirm_config.width < vim.o.columns and confirm_config.height >= 4)
-local confirm_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(confirm_win), 0, -1, false)
-assert(table.concat(confirm_lines, "\n", 1, 2) == confirmation)
-assert(confirm_lines[3] == "")
-assert(confirm_lines[4] == confirmation_prompt)
+local confirm_buf = vim.api.nvim_win_get_buf(confirm_win)
+local confirm_lines = vim.api.nvim_buf_get_lines(confirm_buf, 0, -1, false)
+assert(confirm_lines[1] == 'E325: ATTENTION Found a swap file by the name ".file.lua.swp"')
+assert(confirm_lines[2] == "While opening file.lua")
+local confirm_height = vim.api.nvim_win_get_height(confirm_win)
+assert(confirm_height <= math.floor(vim.o.lines / 2))
+assert(vim.api.nvim_buf_line_count(confirm_buf) > confirm_height)
+local top_before = vim.fn.getwininfo(confirm_win)[1].topline
+assert(top_before == 1)
+local ctrl_d = vim.api.nvim_replace_termcodes("<C-d>", true, false, true)
+assert(vim._on_key("", ctrl_d))
+assert(vim.fn.getwininfo(confirm_win)[1].topline > top_before)
+local ctrl_u = vim.api.nvim_replace_termcodes("<C-u>", true, false, true)
+assert(vim._on_key("", ctrl_u))
+assert(vim.fn.getwininfo(confirm_win)[1].topline == top_before)
+local wheel_down = vim.api.nvim_replace_termcodes("<ScrollWheelDown>", true, false, true)
+assert(vim._on_key("", wheel_down))
+assert(vim.fn.getwininfo(confirm_win)[1].topline > top_before)
+local wheel_up = vim.api.nvim_replace_termcodes("<ScrollWheelUp>", true, false, true)
+assert(vim._on_key("", wheel_up))
+assert(vim.fn.getwininfo(confirm_win)[1].topline == top_before)
 assert(#confirmation_notifications == 0)
 vim.notify = saved_confirmation_notify
 local confirmation_input_visible = false
