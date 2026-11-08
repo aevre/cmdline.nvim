@@ -627,11 +627,16 @@ local confirm_config = vim.api.nvim_win_get_config(confirm_win)
 assert(confirm_config.width < vim.o.columns and confirm_config.height >= 4)
 local confirm_buf = vim.api.nvim_win_get_buf(confirm_win)
 local confirm_lines = vim.api.nvim_buf_get_lines(confirm_buf, 0, -1, false)
-assert(confirm_lines[1] == 'E325: ATTENTION Found a swap file by the name ".file.lua.swp"')
-assert(confirm_lines[2] == "While opening file.lua")
+assert(confirm_lines[1] == confirmation_prompt)
+assert(confirm_lines[2] == "")
+assert(confirm_lines[3] == 'E325: ATTENTION Found a swap file by the name ".file.lua.swp"')
+assert(confirm_lines[4] == "While opening file.lua")
+assert(confirm_lines[#confirm_lines] ~= "")
 local confirm_height = vim.api.nvim_win_get_height(confirm_win)
 assert(confirm_height <= math.floor(vim.o.lines / 2))
 assert(vim.api.nvim_buf_line_count(confirm_buf) > confirm_height)
+local scroll_ns = vim.api.nvim_get_namespaces()["cmdline.confirmation.scroll"]
+assert(scroll_ns and #vim.api.nvim_buf_get_extmarks(confirm_buf, scroll_ns, 0, -1, {}) > 0)
 local top_before = vim.fn.getwininfo(confirm_win)[1].topline
 assert(top_before == 1)
 local ctrl_d = vim.api.nvim_replace_termcodes("<C-d>", true, false, true)
@@ -658,6 +663,14 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 	end
 end
 assert(confirmation_input_visible)
+assert(dispatch("cmdline_show", { { 0, "x" } }, 1, "", confirmation_prompt, 0, 1))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if has_title(win, "Input") then
+		local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+		assert(not table.concat(lines, "\n"):find(confirmation_prompt, 1, true))
+	end
+end
 assert(dispatch("cmdline_hide", 1, true))
 local empty_notifications = {}
 vim.notify = function(text)

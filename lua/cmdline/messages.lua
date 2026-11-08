@@ -83,6 +83,7 @@ local notification_buf, notification_win
 local confirmation_buf, confirmation_win
 local confirmation_chunks, confirmation_prompt
 local confirmation_key_ns = vim.api.nvim_create_namespace("cmdline.confirmation")
+local confirmation_scroll_ns = vim.api.nvim_create_namespace("cmdline.confirmation.scroll")
 local confirmation_scroll = {
 	["<C-D>"] = [[\<C-F>]],
 	["<C-U>"] = [[\<C-B>]],
@@ -118,6 +119,32 @@ local function close_confirmation()
 	confirmation_win, confirmation_buf = close(confirmation_win, confirmation_buf)
 end
 
+local function update_confirmation_scroll()
+	if not valid_win(confirmation_win) then
+		return
+	end
+	local info = vim.fn.getwininfo(confirmation_win)[1]
+	if not info then
+		return
+	end
+	local line_count = vim.api.nvim_buf_line_count(confirmation_buf)
+	local topspill = info.topline - 1
+	local botspill = line_count - info.botline
+	vim.api.nvim_buf_clear_namespace(confirmation_buf, confirmation_scroll_ns, 0, -1)
+	if topspill > 0 then
+		vim.api.nvim_buf_set_extmark(confirmation_buf, confirmation_scroll_ns, info.topline - 1, 0, {
+			virt_text = { { (" ↑ %d "):format(topspill), "MoreMsg" } },
+			virt_text_pos = "right_align",
+		})
+	end
+	if botspill > 0 then
+		vim.api.nvim_buf_set_extmark(confirmation_buf, confirmation_scroll_ns, info.botline - 1, 0, {
+			virt_text = { { (" ↓ %d "):format(botspill), "MoreMsg" } },
+			virt_text_pos = "right_align",
+		})
+	end
+end
+
 local function handle_confirmation_key(typed)
 	local key = vim.fn.keytrans(typed)
 	local command = confirmation_scroll[key]
@@ -131,6 +158,7 @@ local function handle_confirmation_key(typed)
 	vim.fn.win_execute(confirmation_win, ('exe "norm! %s"'):format(command))
 	local after = vim.fn.getwininfo(confirmation_win)[1]
 	if before and after and after.topline ~= before.topline then
+		update_confirmation_scroll()
 		vim.api.nvim__redraw({ flush = true, win = confirmation_win })
 	end
 	return ""
@@ -148,9 +176,12 @@ end
 local function render_confirmation()
 	confirmation_win, confirmation_buf = close(confirmation_win, confirmation_buf)
 	local lines = chunks_text(confirmation_chunks)
+	while #lines > 1 and lines[#lines] == "" do
+		table.remove(lines)
+	end
 	if confirmation_prompt and confirmation_prompt ~= "" then
-		lines[#lines + 1] = ""
-		lines[#lines + 1] = confirmation_prompt
+		table.insert(lines, 1, confirmation_prompt)
+		table.insert(lines, 2, "")
 	end
 	local width = math.max(1, math.min(vim.o.columns - 4, math.floor(vim.o.columns * 0.8)))
 	local height = 0
@@ -179,6 +210,7 @@ local function render_confirmation()
 	vim.wo[confirmation_win].wrap = true
 	vim.wo[confirmation_win].winhighlight = "Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle"
 	if vim.api.nvim_buf_line_count(confirmation_buf) > height then
+		update_confirmation_scroll()
 		vim.on_key(confirmation_on_key, confirmation_key_ns)
 	end
 end
@@ -379,8 +411,8 @@ function M.handle(event, ...)
 			local prompt = args[4]
 			if not confirmation_prompt and prompt and prompt ~= "" then
 				confirmation_prompt = prompt
-				return false, true
 			end
+			return false, true
 		end
 	elseif event == "msg_show" then
 		if not config.messages.enabled then
