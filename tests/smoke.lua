@@ -26,7 +26,17 @@ assert(extensions.resolve(config, { firstc = "", chunks = {}, prompt = "File alr
 assert(extensions.resolve(config, { firstc = "", chunks = {}, prompt = "Enter value: " }, { "" }) == "input")
 local native_notify = vim.notify
 local original_cmdheight = vim.o.cmdheight
+local preloaded_notifications = {}
+vim.notify = function(text, level, opts)
+	preloaded_notifications[#preloaded_notifications + 1] = { text, level, opts }
+end
 cmdline.setup()
+vim.api.nvim_echo({ { "preloaded provider" } }, false, { kind = "echo" })
+assert(vim.wait(500, function()
+	return #preloaded_notifications == 1
+end))
+assert(preloaded_notifications[1][1] == "preloaded provider")
+vim.notify = native_notify
 assert(vim.o.cmdheight == 0)
 local function visible(text)
 	for _, win in ipairs(vim.api.nvim_list_wins()) do

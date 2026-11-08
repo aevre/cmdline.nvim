@@ -2,10 +2,13 @@ local M = {}
 local ui = require("cmdline.ui")
 local valid_win, close, chunks_text = ui.valid_win, ui.close, ui.chunks_text
 local config
-local default_notify
 local history_buf
 local history_win
 local history_prev_win
+local history_command
+local history_generation = 0
+local notify_empty_history
+local clear_notification
 
 ---@return nil Close history and restore the previously active window.
 local function close_history()
@@ -38,9 +41,11 @@ local function show_history(entries)
 		vim.list_extend(lines, messages[index])
 	end
 	if #lines == 0 then
+		notify_empty_history()
 		return
 	end
 
+	clear_notification()
 	history_prev_win = vim.api.nvim_get_current_win()
 	history_buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_set_option_value("buftype", "nofile", { buf = history_buf })
@@ -87,7 +92,7 @@ local pending_messages = {}
 local flush_scheduled = false
 local next_notification_id = 0
 
-local function clear_notification()
+clear_notification = function()
 	if notification_timer then
 		notification_timer:stop()
 		notification_timer:close()
@@ -145,6 +150,14 @@ local function render_confirmation()
 end
 
 local forwarding_message = false
+
+local function default_notify()
+	if vim.notify == vim.api.nvim_notify then
+		return true
+	end
+	local info = debug.getinfo(vim.notify, "S")
+	return info and info.source:match("vim/_core/editor$") ~= nil
+end
 
 local function merge_message(messages, chunks, replace_last, append, id)
 	local index
@@ -250,6 +263,14 @@ local function update_notification(chunks, replace_last, append, id)
 	render_notifications()
 end
 
+notify_empty_history = function()
+	if default_notify() then
+		update_notification({ { 0, "No messages" } }, false, false, "cmdline.nvim:empty-history")
+	else
+		vim.notify("No messages", vim.log.levels.INFO, { title = "Messages" })
+	end
+end
+
 local function notify_message(message)
 	local text = table.concat(chunks_text(message.chunks), "\n")
 	if text ~= "" then
@@ -316,11 +337,16 @@ end
 ---@return boolean?, boolean? Whether the event was handled and whether the next prompt should be hidden.
 function M.handle(event, ...)
 	local args = { ... }
-	if event == "cmdline_show" and confirmation_chunks then
-		local prompt = args[4]
-		if not confirmation_prompt and prompt and prompt ~= "" then
-			confirmation_prompt = prompt
-			return false, true
+	if event == "cmdline_show" then
+		if args[3] == ":" then
+			history_command = table.concat(chunks_text(args[1] or {}), "\n"):match("^%s*messages%s*$") ~= nil
+		end
+		if confirmation_chunks then
+			local prompt = args[4]
+			if not confirmation_prompt and prompt and prompt ~= "" then
+				confirmation_prompt = prompt
+				return false, true
+			end
 		end
 	elseif event == "msg_show" then
 		if not config.messages.enabled then
@@ -374,7 +400,7 @@ function M.handle(event, ...)
 					end
 					local pending = pending_messages
 					pending_messages, flush_scheduled = {}, false
-					local native = vim.notify == default_notify
+					local native = default_notify()
 					local dirty = {}
 					for _, item in ipairs(pending) do
 						if native then
@@ -397,15 +423,31 @@ function M.handle(event, ...)
 			end
 			return true
 		end
-	elseif event == "cmdline_hide" and confirmation_chunks then
-		generation = generation + 1
-		confirmation_chunks, confirmation_prompt = nil, nil
-		vim.schedule(close_confirmation)
-		return true
+	elseif event == "cmdline_hide" then
+		local handled_confirmation = confirmation_chunks ~= nil
+		if handled_confirmation then
+			generation = generation + 1
+			confirmation_chunks, confirmation_prompt = nil, nil
+			vim.schedule(close_confirmation)
+		end
+		if history_command then
+			history_command = nil
+			if not args[2] then
+				history_generation = history_generation + 1
+				local scheduled_generation = history_generation
+				vim.schedule(function()
+					if scheduled_generation == history_generation and config.messages.enabled then
+						notify_empty_history()
+					end
+				end)
+			end
+		end
+		return handled_confirmation and true or nil
 	elseif event == "msg_history_show" then
 		if not config.messages.enabled then
 			return
 		end
+		history_generation = history_generation + 1
 		local scheduled_generation = generation
 		vim.schedule(function()
 			if scheduled_generation == generation and config.messages.enabled then
@@ -432,14 +474,14 @@ function M.handle(event, ...)
 end
 
 ---@param opts cmdline.ResolvedConfig Complete merged plugin configuration.
----@param notify function Default notification provider captured during setup.
-function M.configure(opts, notify)
+function M.configure(opts)
 	config = opts
-	default_notify = notify
 end
 
 function M.close()
 	generation = generation + 1
+	history_generation = history_generation + 1
+	history_command = nil
 	pending_messages, forwarded_messages, flush_scheduled = {}, {}, false
 	close_history()
 	clear_notification()

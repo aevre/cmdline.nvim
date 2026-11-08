@@ -737,6 +737,43 @@ cmdline.setup({ messages = { enabled = false } })
 assert(not dispatch("msg_show", "echo", { { 0, "not consumed" } }, false, false, false, 13))
 cmdline.setup({ messages = { enabled = true } })
 local previous = vim.api.nvim_get_current_win()
+assert(dispatch("cmdline_show", { { 0, "messages" } }, 8, ":", "", 0, 1))
+assert(dispatch("cmdline_hide", 1, false))
+drain()
+local command_empty_history_win
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local win_config = vim.api.nvim_win_get_config(win)
+	if win_config.relative ~= "" then
+		local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+		if table.concat(lines, "\n") == "No messages" then
+			command_empty_history_win = win
+		end
+	end
+end
+assert(command_empty_history_win and vim.api.nvim_get_current_win() == previous)
+assert(dispatch("msg_history_show", {}))
+drain()
+local empty_history_win
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local win_config = vim.api.nvim_win_get_config(win)
+	if win_config.relative ~= "" then
+		local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false)
+		if table.concat(lines, "\n") == "No messages" then
+			empty_history_win = win
+		end
+	end
+end
+assert(empty_history_win and vim.api.nvim_get_current_win() == previous)
+local empty_history_notify
+local saved_empty_history_notify = vim.notify
+vim.notify = function(text, level, opts)
+	empty_history_notify = { text, level, opts }
+end
+assert(dispatch("msg_history_show", {}))
+drain()
+assert(vim.deep_equal(empty_history_notify, { "No messages", vim.log.levels.INFO, { title = "Messages" } }))
+assert(vim.api.nvim_get_current_win() == previous)
+vim.notify = saved_empty_history_notify
 assert(dispatch("msg_history_show", {
 	{ "echo", { { 0, "old\nline" } }, false },
 	{ "echon", { { 0, " continued" } }, true },
