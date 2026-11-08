@@ -24,6 +24,7 @@ local search_buf
 local command_block = {}
 local hide_next_prompt = false
 local special_char
+local popup_input_row, popup_input_prefix, popup_hidden, popup_input_lines
 ---@type fun(): string Resolved context for the current command line.
 local view_name
 ---@type fun(): cmdline.View Active preset for the current context.
@@ -296,6 +297,8 @@ local function redraw_cmdline()
 	set_lines(buf, lines)
 	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
 	local input_prefix = prefix .. string.rep(" ", current.indent or 0)
+	popup_input_row, popup_input_prefix, popup_hidden = input_row, input_prefix, hidden
+	popup_input_lines = vim.deepcopy(input_lines)
 	local block_row = 0
 	for _, block_line in ipairs(command_block) do
 		render_chunk_highlights(buf, namespace, block_line, block_row, 0)
@@ -844,16 +847,35 @@ function M.resize()
 end
 
 ---@param grid integer? UI grid anchoring the popup; `-1` means external command-line.
+---@param cmdline_col integer? Byte position in the external command-line text.
 ---@return integer? win Command-line window id, or nil when the popup uses grid coordinates.
 ---@return integer? row Cursor row inside the command-line window.
 ---@return integer? col Display column of the completion anchor.
-function M.popup_anchor(grid)
+function M.popup_anchor(grid, cmdline_col)
 	local win, buf = cmd_win, cmd_buf
 	if (current.active or grid == -1) and win and buf and valid_win(win) then
 		redraw_cmdline()
-		local cursor = vim.api.nvim_win_get_cursor(win)
-		local line = vim.api.nvim_buf_get_lines(buf, cursor[1] - 1, cursor[1], false)[1] or ""
-		return win, cursor[1], 1 + vim.fn.strdisplaywidth(line:sub(1, cursor[2]))
+		local row, byte_col
+		if grid == -1 and cmdline_col ~= nil and popup_input_lines then
+			row = popup_input_row or 0
+			byte_col = math.max(0, cmdline_col - (popup_hidden or 0))
+			for _, line in ipairs(popup_input_lines) do
+				if byte_col <= #line then
+					break
+				end
+				byte_col = byte_col - #line - 1
+				row = row + 1
+			end
+			if row == (popup_input_row or 0) then
+				byte_col = #(popup_input_prefix or "") + byte_col
+			end
+			row = row + 1
+		else
+			local cursor = vim.api.nvim_win_get_cursor(win)
+			row, byte_col = cursor[1], cursor[2]
+		end
+		local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or ""
+		return win, row, 1 + vim.fn.strdisplaywidth(line:sub(1, byte_col))
 	end
 end
 

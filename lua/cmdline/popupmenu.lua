@@ -105,7 +105,7 @@ local function open_pum(items, selected, row, col, grid)
 		focusable = false,
 		zindex = 201,
 	}
-	local cmd_win, cursor_row, popup_col = commandline.popup_anchor(grid)
+	local cmd_win, cursor_row, popup_col = commandline.popup_anchor(grid, col)
 	if cmd_win and cursor_row and popup_col then
 		opts.relative = "win"
 		opts.win = cmd_win

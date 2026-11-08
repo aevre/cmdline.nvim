@@ -413,8 +413,23 @@ local popup_config = require("cmdline.config").merge()
 require("cmdline.popupmenu").configure(popup_config)
 local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(cmd_win), 0, -1, false)
 assert(lines[1]:find("print('中文')", 1, true) and not lines[1]:find("lua", 1, true))
-assert(dispatch("popupmenu_show", { { "one", "f" }, { "two", "Unknown" }, { "three", "" } }, 0, 0, 0, -1))
+local function popup_col()
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		local opts = vim.api.nvim_win_get_config(win)
+		if opts.zindex == 201 then
+			return opts.col
+		end
+	end
+end
+local popup_items = { { "one", "f" }, { "two", "Unknown" }, { "three", "" } }
+assert(dispatch("popupmenu_show", popup_items, 0, 0, #"lua ", -1))
 drain()
+local lua_start_col = popup_col()
+assert(lua_start_col)
+assert(dispatch("popupmenu_show", popup_items, 0, 0, #"lua print('中文", -1))
+drain()
+local multibyte_col = popup_col()
+assert(multibyte_col - lua_start_col == vim.fn.strdisplaywidth("print('中文"))
 assert(#vim.api.nvim_list_wins() == baseline + 2)
 local kind_icon_lines, kind_icon_win
 for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -514,6 +529,22 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 end
 assert(popup_lines and popup_lines[1] == "item1")
 assert(dispatch("cmdline_hide"))
+drain()
+assert(#vim.api.nvim_list_wins() == baseline)
+assert(dispatch("popupmenu_show", { { "fallback" } }, 0, 3, 5, 0))
+drain()
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	local opts = vim.api.nvim_win_get_config(win)
+	if opts.zindex == 201 then
+		assert(opts.relative == "editor" and opts.row == 3 and opts.col == 5)
+	end
+end
+assert(dispatch("popupmenu_hide"))
+drain()
+assert(#vim.api.nvim_list_wins() == baseline)
+assert(dispatch("cmdline_block_show", { { { 0, "pending block" } } }))
+assert(dispatch("cmdline_block_append", { { { 0, " pending append" } } }))
+assert(dispatch("cmdline_block_hide"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
 cmdline.setup()
