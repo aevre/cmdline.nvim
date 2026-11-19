@@ -327,6 +327,8 @@ require("vim._core.ui2").enable({ enable = true })
 
 ## Development
 
+Run `:checkhealth cmdline` in Neovim to inspect runtime requirements. `make health` exercises the same provider headlessly.
+
 Run the complete local check from the repository root:
 
 ```sh

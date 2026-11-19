@@ -327,6 +327,8 @@ require("vim._core.ui2").enable({ enable = true })
 
 ## 开发
 
+在 Neovim 中运行 `:checkhealth cmdline` 检查运行环境；`make health` 会以 headless 模式验证同一个 provider。
+
 在仓库根目录运行完整检查：
 
 ```sh
