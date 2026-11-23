@@ -1,6 +1,7 @@
 local M = {}
 local ui = require("cmdline.ui")
-local valid_win, close, chunks_text, set_lines = ui.valid_win, ui.close, ui.chunks_text, ui.set_lines
+local valid_win, close, chunks_text, set_lines =
+	ui.valid_win, ui.close, ui.chunks_text, ui.set_lines
 ---@type cmdline.ResolvedConfig
 local config
 local extensions = require("cmdline.extensions")
@@ -78,7 +79,8 @@ local function position(width, height, rows)
 	end
 	local available_x = math.max(0, vim.o.columns - width)
 	local available_y = math.max(0, editor_rows - height)
-	local x = placement == "custom" and dimension(view.x, available_x) or math.floor(available_x / 2)
+	local x = placement == "custom" and dimension(view.x, available_x)
+		or math.floor(available_x / 2)
 	local y = placement == "custom" and dimension(view.y, available_y)
 		or placement == "top" and 4
 		or placement == "bottom" and math.max(0, available_y - 3)
@@ -130,7 +132,8 @@ active_view = function()
 	local context = view_name()
 	local format = format_for(context)
 	local name = format.view or config.cmdline.view
-	local view = vim.deepcopy(config.cmdline.opts.presets[name] or config.cmdline.opts.presets.cmdline_popup)
+	local view =
+		vim.deepcopy(config.cmdline.opts.presets[name] or config.cmdline.opts.presets.cmdline_popup)
 	if current.inherited_view then
 		for _, key in ipairs({ "position", "width", "border", "x", "y" }) do
 			view[key] = current.inherited_view[key]
@@ -158,7 +161,8 @@ local function render_syntax_highlights(buf, namespace, text, lang, start_row, s
 				local start_row_offset, start_byte, end_row_offset, end_byte = node:range()
 				local group = "@" .. name .. "." .. lang
 				if start_row_offset == 0 and end_row_offset == 0 and end_byte > start_byte then
-					local line = vim.api.nvim_buf_get_lines(buf, start_row, start_row + 1, false)[1] or ""
+					local line = vim.api.nvim_buf_get_lines(buf, start_row, start_row + 1, false)[1]
+						or ""
 					local first_col, last_col = start_col + start_byte, start_col + end_byte
 					if first_col >= 0 and last_col <= #line then
 						vim.api.nvim_buf_set_extmark(buf, namespace, start_row, first_col, {
@@ -166,7 +170,10 @@ local function render_syntax_highlights(buf, namespace, text, lang, start_row, s
 							hl_group = group,
 							priority = 100,
 						})
-						if lang == "lua" and (name == "function.call" or name == "function.builtin") then
+						if
+							lang == "lua"
+							and (name == "function.call" or name == "function.builtin")
+						then
 							function_captures[first_col] = last_col
 						end
 					end
@@ -177,7 +184,8 @@ local function render_syntax_highlights(buf, namespace, text, lang, start_row, s
 	if lang == "lua" then
 		for first_col, name in text:gmatch("()([%a_][%w_]*)") do
 			local next_char = text:sub(first_col + #name):match("^%s*(.)")
-			local call_start, call_end = start_col + first_col - 1, start_col + first_col - 1 + #name
+			local call_start, call_end =
+				start_col + first_col - 1, start_col + first_col - 1 + #name
 			if next_char == "(" and not function_captures[call_start] then
 				vim.api.nvim_buf_set_extmark(buf, namespace, start_row, call_start, {
 					end_col = call_end,
@@ -202,7 +210,8 @@ local function render_chunk_highlights(buf, namespace, chunks, start_row, start_
 				local color = resolved[key]
 				resolved[key] = nil
 				if color ~= nil then
-					resolved[name] = type(color) == "number" and string.format("#%06x", color) or color
+					resolved[name] = type(color) == "number" and string.format("#%06x", color)
+						or color
 				end
 			end
 			group = "CmdlineChunk" .. tostring(hl_id or vim.inspect(resolved):gsub("%W", ""))
@@ -292,7 +301,9 @@ local function redraw_cmdline()
 		prefix = icon .. " " .. prompt
 	end
 	if prefix ~= "" then
-		lines[input_row + 1] = prefix .. string.rep(" ", current.indent or 0) .. lines[input_row + 1]
+		lines[input_row + 1] = prefix
+			.. string.rep(" ", current.indent or 0)
+			.. lines[input_row + 1]
 	end
 	set_lines(buf, lines)
 	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
@@ -347,7 +358,9 @@ local function redraw_cmdline()
 	if icon ~= "" then
 		vim.api.nvim_buf_set_extmark(buf, namespace, input_row, 0, {
 			end_col = #icon,
-			hl_group = format.icon_hl_group or view.icon_hl_group or config.cmdline.opts.icon_hl_group,
+			hl_group = format.icon_hl_group
+				or view.icon_hl_group
+				or config.cmdline.opts.icon_hl_group,
 		})
 	end
 	local cursor_col = #prefix + (current.indent or 0) + math.max(0, current.pos - hidden)
@@ -446,7 +459,11 @@ local function clear_search_count()
 	search_generation = search_generation + 1
 	local generation = search_generation
 	vim.schedule(function()
-		if generation == search_generation and search_buf and vim.api.nvim_buf_is_valid(search_buf) then
+		if
+			generation == search_generation
+			and search_buf
+			and vim.api.nvim_buf_is_valid(search_buf)
+		then
 			vim.api.nvim_buf_clear_namespace(search_buf, search_ns, 0, -1)
 			search_buf = nil
 		end
@@ -864,7 +881,10 @@ function M.resize()
 		local width, rows = dimensions()
 		local height = vim.api.nvim_win_get_height(win)
 		local col, row = position(width, height, rows)
-		vim.api.nvim_win_set_config(win, { relative = "editor", width = width, row = row, col = col })
+		vim.api.nvim_win_set_config(
+			win,
+			{ relative = "editor", width = width, row = row, col = col }
+		)
 	end
 end
 

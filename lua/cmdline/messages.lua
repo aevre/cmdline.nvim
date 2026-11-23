@@ -53,11 +53,18 @@ local function show_history(entries)
 	vim.api.nvim_set_option_value("modifiable", true, { buf = history_buf })
 	vim.api.nvim_buf_set_lines(history_buf, 0, -1, false, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = history_buf })
+
 	vim.keymap.set("n", "q", close_history, { buffer = history_buf, silent = true, nowait = true })
-	vim.keymap.set("n", "<Esc>", close_history, { buffer = history_buf, silent = true, nowait = true })
+	vim.keymap.set(
+		"n",
+		"<Esc>",
+		close_history,
+		{ buffer = history_buf, silent = true, nowait = true }
+	)
 
 	local width = math.max(40, math.min(vim.o.columns - 4, math.floor(vim.o.columns * 0.8)))
 	local height = math.max(1, math.min(#lines, vim.o.lines - 4))
+
 	history_win = vim.api.nvim_open_win(history_buf, true, {
 		relative = "editor",
 		row = math.max(0, math.floor((vim.o.lines - height) / 2)),
@@ -132,16 +139,28 @@ local function update_confirmation_scroll()
 	local botspill = line_count - info.botline
 	vim.api.nvim_buf_clear_namespace(confirmation_buf, confirmation_scroll_ns, 0, -1)
 	if topspill > 0 then
-		vim.api.nvim_buf_set_extmark(confirmation_buf, confirmation_scroll_ns, info.topline - 1, 0, {
-			virt_text = { { (" ↑ %d "):format(topspill), "MoreMsg" } },
-			virt_text_pos = "right_align",
-		})
+		vim.api.nvim_buf_set_extmark(
+			confirmation_buf,
+			confirmation_scroll_ns,
+			info.topline - 1,
+			0,
+			{
+				virt_text = { { (" ↑ %d "):format(topspill), "MoreMsg" } },
+				virt_text_pos = "right_align",
+			}
+		)
 	end
 	if botspill > 0 then
-		vim.api.nvim_buf_set_extmark(confirmation_buf, confirmation_scroll_ns, info.botline - 1, 0, {
-			virt_text = { { (" ↓ %d "):format(botspill), "MoreMsg" } },
-			virt_text_pos = "right_align",
-		})
+		vim.api.nvim_buf_set_extmark(
+			confirmation_buf,
+			confirmation_scroll_ns,
+			info.botline - 1,
+			0,
+			{
+				virt_text = { { (" ↓ %d "):format(botspill), "MoreMsg" } },
+				virt_text_pos = "right_align",
+			}
+		)
 	end
 end
 
@@ -208,7 +227,8 @@ local function render_confirmation()
 		zindex = 190,
 	})
 	vim.wo[confirmation_win].wrap = true
-	vim.wo[confirmation_win].winhighlight = "Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle"
+	vim.wo[confirmation_win].winhighlight =
+		"Normal:CmdlineNormal,FloatBorder:CmdlineBorder,FloatTitle:CmdlineTitle"
 	if vim.api.nvim_buf_line_count(confirmation_buf) > height then
 		update_confirmation_scroll()
 		vim.on_key(confirmation_on_key, confirmation_key_ns)
@@ -405,7 +425,9 @@ function M.handle(event, ...)
 	local args = { ... }
 	if event == "cmdline_show" then
 		if args[3] == ":" then
-			history_command = table.concat(chunks_text(args[1] or {}), "\n"):match("^%s*messages%s*$") ~= nil
+			history_command = table
+				.concat(chunks_text(args[1] or {}), "\n")
+				:match("^%s*messages%s*$") ~= nil
 		end
 		if confirmation_chunks then
 			local prompt = args[4]
@@ -425,7 +447,8 @@ function M.handle(event, ...)
 		end
 		if kind == "shell_cmd" then
 			local previous = forwarded_messages[#forwarded_messages]
-			forwarded_messages = previous and { { notification_id = previous.notification_id } } or {}
+			forwarded_messages = previous and { { notification_id = previous.notification_id } }
+				or {}
 			return
 		end
 		if kind ~= "search_count" and kind ~= "confirm" and not should_notify_message(kind) then
@@ -434,7 +457,11 @@ function M.handle(event, ...)
 		if kind == "search_count" then
 			return
 		end
-		if not append and not replace_last and table.concat(chunks_text(chunks), "\n"):match("%S") == nil then
+		if
+			not append
+			and not replace_last
+			and table.concat(chunks_text(chunks), "\n"):match("%S") == nil
+		then
 			return true
 		end
 		if forwarding_message then
@@ -445,14 +472,22 @@ function M.handle(event, ...)
 			confirmation_chunks, confirmation_prompt = chunks, nil
 			local scheduled_generation = generation
 			vim.schedule(function()
-				if scheduled_generation == generation and config.messages.enabled and confirmation_chunks then
+				if
+					scheduled_generation == generation
+					and config.messages.enabled
+					and confirmation_chunks
+				then
 					render_confirmation()
 				end
 			end)
 			return true
 		end
 		if
-			(config.messages.view_search and config.cmdline.enabled and is_search_message(kind, chunks))
+			(
+				config.messages.view_search
+				and config.cmdline.enabled
+				and is_search_message(kind, chunks)
+			)
 			or kind == ""
 			or should_notify_message(kind)
 		then
@@ -472,7 +507,13 @@ function M.handle(event, ...)
 						if native then
 							update_notification(item[2], item[3], item[4], item[5])
 						else
-							local message = merge_message(forwarded_messages, item[2], item[3], item[4], item[5])
+							local message = merge_message(
+								forwarded_messages,
+								item[2],
+								item[3],
+								item[4],
+								item[5]
+							)
 							message.level = message_level(item[1])
 							message.title = item[1] == "lua_print" and "Lua" or nil
 							dirty[message] = true

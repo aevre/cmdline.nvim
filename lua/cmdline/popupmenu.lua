@@ -28,10 +28,14 @@ local function redraw_pum()
 	for i = pum_first, math.min(#pum_items, pum_first + pum_height - 1) do
 		local item = pum_items[i]
 		local label = item.word or item[1] or ""
-		local icon = type(icons) == "table" and (icons[item.kind or item[2]] or icons.default) or nil
+		local icon = type(icons) == "table" and (icons[item.kind or item[2]] or icons.default)
+			or nil
 		icon = icon or "󰘦"
 		local prefix = pum_show_icons
-				and ((icon or "") .. string.rep(" ", pum_icon_width - vim.fn.strdisplaywidth(icon or "") + 1))
+				and ((icon or "") .. string.rep(
+					" ",
+					pum_icon_width - vim.fn.strdisplaywidth(icon or "") + 1
+				))
 			or ""
 		lines[#lines + 1] = prefix .. label
 		if i == pum_selected + 1 then
@@ -51,11 +55,13 @@ end
 
 local function close_pum()
 	pum_win, pum_buf = close(pum_win, pum_buf)
-	pum_items, pum_selected, pum_first, pum_height, pum_icon_width, pum_show_icons = {}, -1, 1, 0, 0, false
+	pum_items, pum_selected, pum_first, pum_height, pum_icon_width, pum_show_icons =
+		{}, -1, 1, 0, 0, false
 end
 
 local function external_completion_menu()
-	return vim.api.nvim_get_mode().mode == "c" and (package.loaded["blink.cmp"] ~= nil or package.loaded["cmp"] ~= nil)
+	return vim.api.nvim_get_mode().mode == "c"
+		and (package.loaded["blink.cmp"] ~= nil or package.loaded["cmp"] ~= nil)
 end
 
 ---@param items cmdline.PopupItem[] Completion items from the UI2 event.
@@ -75,7 +81,8 @@ local function open_pum(items, selected, row, col, grid)
 	end
 	pum_items, pum_selected = items, selected
 	pum_icon_width = 0
-	pum_show_icons = type(config.popupmenu.kind_icons) == "table" and next(config.popupmenu.kind_icons) ~= nil
+	pum_show_icons = type(config.popupmenu.kind_icons) == "table"
+		and next(config.popupmenu.kind_icons) ~= nil
 	if pum_show_icons then
 		for _, icon in pairs(config.popupmenu.kind_icons) do
 			pum_icon_width = math.max(pum_icon_width, vim.fn.strdisplaywidth(icon))
@@ -91,7 +98,9 @@ local function open_pum(items, selected, row, col, grid)
 	for _, item in ipairs(items) do
 		width = math.max(
 			width,
-			vim.fn.strdisplaywidth(item.word or item[1] or "") + 2 + (pum_show_icons and pum_icon_width + 1 or 0)
+			vim.fn.strdisplaywidth(item.word or item[1] or "")
+				+ 2
+				+ (pum_show_icons and pum_icon_width + 1 or 0)
 		)
 	end
 	local opts = {
@@ -114,7 +123,11 @@ local function open_pum(items, selected, row, col, grid)
 		opts.width = math.max(1, math.min(width, vim.o.columns - popup_col))
 	end
 	pum_win = vim.api.nvim_open_win(pum_buf, false, opts)
-	vim.api.nvim_set_option_value("winhighlight", "Normal:CmdlinePum,FloatBorder:CmdlineBorder", { win = pum_win })
+	vim.api.nvim_set_option_value(
+		"winhighlight",
+		"Normal:CmdlinePum,FloatBorder:CmdlineBorder",
+		{ win = pum_win }
+	)
 	redraw_pum()
 end
 

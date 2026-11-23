@@ -35,7 +35,11 @@ local function resolve_extension(extension, state)
 	if type(extension) ~= "table" then
 		return nil
 	end
-	if extension.prompt and state.prompt ~= "" and matches_prompt(state.prompt:lower(), extension.prompt) then
+	if
+		extension.prompt
+		and state.prompt ~= ""
+		and matches_prompt(state.prompt:lower(), extension.prompt)
+	then
 		return extension.name
 	end
 	if extension.resolve then
@@ -64,7 +68,11 @@ M.builtin = {
 	end,
 	function(state)
 		local text = command(state)
-		if text:match("^lua%s+") or text:match("^lua%s*=") or (state.firstc == ":" and text:match("^=%s*")) then
+		if
+			text:match("^lua%s+")
+			or text:match("^lua%s*=")
+			or (state.firstc == ":" and text:match("^=%s*"))
+		then
 			return "lua"
 		elseif text:match("^s/") or text:match("^substitute%f[%W]") then
 			return "substitute"

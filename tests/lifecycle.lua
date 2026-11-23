@@ -72,14 +72,18 @@ drain()
 assert(vim.api.nvim_win_is_valid(nested_win))
 assert(has_title(nested_win, "Expression"))
 local inner_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
-assert(inner_line:find("", 1, true) and inner_line:find("1 + 2", 1, true), vim.inspect(inner_line))
+assert(
+	inner_line:find("", 1, true) and inner_line:find("1 + 2", 1, true),
+	vim.inspect(inner_line)
+)
 assert(dispatch("cmdline_pos", 2, 2))
 drain()
 assert(dispatch("cmdline_hide", 2, false))
 drain()
 assert(vim.api.nvim_win_is_valid(nested_win))
 assert(has_title(nested_win, "Command"))
-local parent_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+local parent_line =
+	vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
 assert(parent_line:find("echo input(", 1, true), vim.inspect(parent_line))
 assert(dispatch("cmdline_hide", 1, false))
 drain()
@@ -94,14 +98,23 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 end
 assert(has_title(nested_win, "Lua"))
 local lua_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
-assert(lua_line:find("", 1, true) and lua_line:find("print(1 + 2)", 1, true), vim.inspect(lua_line))
+assert(
+	lua_line:find("", 1, true) and lua_line:find("print(1 + 2)", 1, true),
+	vim.inspect(lua_line)
+)
 local lua_buf = vim.api.nvim_win_get_buf(nested_win)
-local lua_marks =
-	vim.api.nvim_buf_get_extmarks(lua_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+local lua_marks = vim.api.nvim_buf_get_extmarks(
+	lua_buf,
+	vim.api.nvim_get_namespaces()["cmdline.nvim"],
+	0,
+	-1,
+	{ details = true }
+)
 local highlighted_print, highlighted_number = false, false
 for _, mark in ipairs(lua_marks) do
 	local text = lua_line:sub(mark[3] + 1, mark[4].end_col)
-	highlighted_print = highlighted_print or (text == "print" and mark[4].hl_group == "@function.builtin.lua")
+	highlighted_print = highlighted_print
+		or (text == "print" and mark[4].hl_group == "@function.builtin.lua")
 	highlighted_number = highlighted_number or (text == "1" and mark[4].hl_group == "@number.lua")
 end
 assert(highlighted_print and highlighted_number)
@@ -109,21 +122,29 @@ assert(has_title(nested_win, "Lua"))
 assert(not lua_line:find(":=", 1, true), vim.inspect(lua_line))
 assert(dispatch("cmdline_show", { { 0, "lua print(1 + 2)" } }, 16, ":", "", 0, 1))
 drain()
-local lua_command_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+local lua_command_line =
+	vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
 assert(lua_command_line:find("print(1 + 2)", 1, true), vim.inspect(lua_command_line))
 lua_buf = vim.api.nvim_win_get_buf(nested_win)
-lua_marks =
-	vim.api.nvim_buf_get_extmarks(lua_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+lua_marks = vim.api.nvim_buf_get_extmarks(
+	lua_buf,
+	vim.api.nvim_get_namespaces()["cmdline.nvim"],
+	0,
+	-1,
+	{ details = true }
+)
 highlighted_print = false
 for _, mark in ipairs(lua_marks) do
 	local text = lua_command_line:sub(mark[3] + 1, mark[4].end_col)
-	highlighted_print = highlighted_print or (text == "print" and mark[4].hl_group == "@function.builtin.lua")
+	highlighted_print = highlighted_print
+		or (text == "print" and mark[4].hl_group == "@function.builtin.lua")
 end
 assert(highlighted_print)
 for _, partial in ipairs({ 'lua print("', 'lua print("hello', 'lua print("hello")' }) do
 	assert(dispatch("cmdline_show", { { 0, partial } }, #partial, ":", "", 0, 1))
 	drain()
-	local partial_line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
+	local partial_line =
+		vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_win), 0, -1, false)[1]
 	local partial_marks = vim.api.nvim_buf_get_extmarks(
 		vim.api.nvim_win_get_buf(nested_win),
 		vim.api.nvim_get_namespaces()["cmdline.nvim"],
@@ -168,7 +189,10 @@ assert(vim.api.nvim_win_get_config(nested_win).width == vim.o.columns)
 assert(dispatch("cmdline_hide", 1, false))
 drain()
 local resolved_config = require("cmdline.config").merge()
-require("cmdline.commandline").configure(resolved_config, vim.api.nvim_create_namespace("cmdline.nvim"))
+require("cmdline.commandline").configure(
+	resolved_config,
+	vim.api.nvim_create_namespace("cmdline.nvim")
+)
 
 assert(dispatch("cmdline_show", { { 0, "search" } }, 6, "/", "", 0, 1))
 drain()
@@ -185,8 +209,13 @@ assert(dispatch("cmdline_show", { { { foreground = 0xff0000 }, "abc", 77 } }, 1,
 assert(dispatch("cmdline_special_char", string.char(22), true, 1))
 assert(dispatch("cmdline_pos", 2, 1))
 drain()
-local cmd_marks =
-	vim.api.nvim_buf_get_extmarks(cmd_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+local cmd_marks = vim.api.nvim_buf_get_extmarks(
+	cmd_buf,
+	vim.api.nvim_get_namespaces()["cmdline.nvim"],
+	0,
+	-1,
+	{ details = true }
+)
 local special_text
 for _, mark in ipairs(cmd_marks) do
 	if mark[4].virt_text then
@@ -201,8 +230,13 @@ drain()
 local rendered = vim.api.nvim_buf_get_lines(cmd_buf, 0, -1, false)
 assert(rendered[1] == "function Foo()" and rendered[2] == "  echo 'foo'")
 assert(rendered[3] == ">abc")
-cmd_marks =
-	vim.api.nvim_buf_get_extmarks(cmd_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+cmd_marks = vim.api.nvim_buf_get_extmarks(
+	cmd_buf,
+	vim.api.nvim_get_namespaces()["cmdline.nvim"],
+	0,
+	-1,
+	{ details = true }
+)
 local has_special, has_chunk_hl = false, false
 for _, mark in ipairs(cmd_marks) do
 	local details = mark[4]
@@ -221,19 +255,30 @@ assert(dispatch("cmdline_show", { { 0, 'echo "hi"' } }, 8, ":", "", 0, 1))
 drain()
 local vim_buf = vim.api.nvim_win_get_buf(cmd_win)
 local vim_line = vim.api.nvim_buf_get_lines(vim_buf, 0, -1, false)[1]
-local vim_marks =
-	vim.api.nvim_buf_get_extmarks(vim_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+local vim_marks = vim.api.nvim_buf_get_extmarks(
+	vim_buf,
+	vim.api.nvim_get_namespaces()["cmdline.nvim"],
+	0,
+	-1,
+	{ details = true }
+)
 local highlighted_echo, highlighted_string = false, false
 for _, mark in ipairs(vim_marks) do
 	local text = vim_line:sub(mark[3] + 1, mark[4].end_col)
 	highlighted_echo = highlighted_echo or (text == "echo" and mark[4].hl_group == "@keyword.vim")
-	highlighted_string = highlighted_string or (text == '"hi"' and mark[4].hl_group == "@string.vim")
+	highlighted_string = highlighted_string
+		or (text == '"hi"' and mark[4].hl_group == "@string.vim")
 end
 assert(highlighted_echo and highlighted_string)
 assert(dispatch("cmdline_show", { { 0, "abcd" } }, 4, "", ">", 0, 1))
 drain()
-cmd_marks =
-	vim.api.nvim_buf_get_extmarks(cmd_buf, vim.api.nvim_get_namespaces()["cmdline.nvim"], 0, -1, { details = true })
+cmd_marks = vim.api.nvim_buf_get_extmarks(
+	cmd_buf,
+	vim.api.nvim_get_namespaces()["cmdline.nvim"],
+	0,
+	-1,
+	{ details = true }
+)
 for _, mark in ipairs(cmd_marks) do
 	assert(mark[4].virt_text == nil)
 end
@@ -255,7 +300,9 @@ timer:start(0, 0, function()
 	fast_result = {
 		pcall(function()
 			assert(vim.in_fast_event())
-			assert(dispatch("msg_show", "search_count", { { 0, " /foo" }, { 0, " [3/10]  " } }, false))
+			assert(
+				dispatch("msg_show", "search_count", { { 0, " /foo" }, { 0, " [3/10]  " } }, false)
+			)
 		end),
 	}
 	timer:close()
@@ -277,7 +324,12 @@ for _, mark in ipairs(marks) do
 	local details = mark[4]
 	if
 		details.virt_text
-		and table.concat({ details.virt_text[1][1], details.virt_text[2][1], details.virt_text[3][1] }) == "[3/10]"
+		and table.concat({
+				details.virt_text[1][1],
+				details.virt_text[2][1],
+				details.virt_text[3][1],
+			})
+			== "[3/10]"
 	then
 		found_search_count = true
 	end
@@ -285,7 +337,9 @@ end
 assert(found_search_count and marks[1][2] == 1 and marks[1][4].virt_text_pos == "win_col")
 local virtual_text = marks[1][4].virt_text
 assert(table.concat({ virtual_text[1][1], virtual_text[2][1], virtual_text[3][1] }) == "[3/10]")
-assert(virtual_text[1][2] == "CmdlineSearchCount" and virtual_text[2][2] == "CmdlineSearchCountCurrent")
+assert(
+	virtual_text[1][2] == "CmdlineSearchCount" and virtual_text[2][2] == "CmdlineSearchCountCurrent"
+)
 local count_hl = vim.api.nvim_get_hl(0, { name = "CmdlineSearchCount" })
 local current_hl = vim.api.nvim_get_hl(0, { name = "CmdlineSearchCountCurrent" })
 assert(count_hl.fg and not count_hl.bg and not count_hl.italic and count_hl.bold)
@@ -295,12 +349,20 @@ assert(dispatch("cmdline_hide", 1, true))
 assert(dispatch("msg_show", "search_count", { { 0, " [3/10]  " } }, false))
 drain()
 assert(
-	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
+	#vim.api.nvim_buf_get_extmarks(
+			source_buf,
+			vim.api.nvim_get_namespaces()["cmdline.search_count"],
+			0,
+			-1,
+			{}
+		) == 0
 )
 assert(vim.o.cmdheight == 0 and vim.g.ui_cmdline_pos == nil)
 vim.fn.setreg("/", "foo")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
-assert(dispatch("msg_show", "search_count", { { 0, " W [1/10]  " } }, false, false, false, 0, "search"))
+assert(
+	dispatch("msg_show", "search_count", { { 0, " W [1/10]  " } }, false, false, false, 0, "search")
+)
 drain()
 marks = vim.api.nvim_buf_get_extmarks(
 	source_buf,
@@ -309,18 +371,22 @@ marks = vim.api.nvim_buf_get_extmarks(
 	-1,
 	{ details = true }
 )
-assert(
-	#marks == 1
-		and marks[1][2] == 0
-		and table.concat({ marks[1][4].virt_text[1][1], marks[1][4].virt_text[2][1], marks[1][4].virt_text[3][1] }) == "[1/10]"
-		and marks[1][4].virt_text_pos == "win_col"
-		and marks[1][4].virt_text_win_col == 6
-)
+assert(#marks == 1 and marks[1][2] == 0 and table.concat({
+	marks[1][4].virt_text[1][1],
+	marks[1][4].virt_text[2][1],
+	marks[1][4].virt_text[3][1],
+}) == "[1/10]" and marks[1][4].virt_text_pos == "win_col" and marks[1][4].virt_text_win_col == 6)
 vim.api.nvim_win_set_cursor(0, { 1, 4 })
 require("cmdline.commandline").refresh_search_count()
 drain()
 assert(
-	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
+	#vim.api.nvim_buf_get_extmarks(
+			source_buf,
+			vim.api.nvim_get_namespaces()["cmdline.search_count"],
+			0,
+			-1,
+			{}
+		) == 0
 )
 vim.api.nvim_win_set_cursor(0, { 1, 8 })
 require("cmdline.commandline").refresh_search_count()
@@ -348,7 +414,13 @@ vim.api.nvim_win_set_cursor(0, { 1, 0 })
 require("cmdline.commandline").refresh_search_count()
 drain()
 assert(
-	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 1
+	#vim.api.nvim_buf_get_extmarks(
+			source_buf,
+			vim.api.nvim_get_namespaces()["cmdline.search_count"],
+			0,
+			-1,
+			{}
+		) == 1
 )
 vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { "foo bar foo baz foo" })
 vim.fn.setreg("/", "foo")
@@ -369,7 +441,9 @@ local edge_col = vim.api.nvim_win_get_width(0) - 4
 vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { string.rep("x", edge_col) .. "foo" })
 vim.fn.setreg("/", "foo")
 vim.api.nvim_win_set_cursor(0, { 1, edge_col })
-assert(dispatch("msg_show", "search_count", { { 0, " [1/10]  " } }, false, false, false, 0, "search"))
+assert(
+	dispatch("msg_show", "search_count", { { 0, " [1/10]  " } }, false, false, false, 0, "search")
+)
 drain()
 marks = vim.api.nvim_buf_get_extmarks(
 	source_buf,
@@ -383,7 +457,9 @@ vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { "中foo foo" })
 vim.fn.setreg("/", "foo\\zs")
 vim.v.hlsearch = 1
 vim.api.nvim_win_set_cursor(0, { 1, 6 })
-assert(dispatch("msg_show", "search_count", { { 0, " [1/2]  " } }, false, false, false, 0, "search"))
+assert(
+	dispatch("msg_show", "search_count", { { 0, " [1/2]  " } }, false, false, false, 0, "search")
+)
 drain()
 marks = vim.api.nvim_buf_get_extmarks(
 	source_buf,
@@ -397,12 +473,20 @@ vim.api.nvim_win_set_cursor(0, { 1, 5 })
 require("cmdline.commandline").refresh_search_count()
 drain()
 assert(
-	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
+	#vim.api.nvim_buf_get_extmarks(
+			source_buf,
+			vim.api.nvim_get_namespaces()["cmdline.search_count"],
+			0,
+			-1,
+			{}
+		) == 0
 )
 vim.fn.setreg("/", "foo")
 vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { "中foo foo" })
 vim.api.nvim_win_set_cursor(0, { 1, 3 })
-assert(dispatch("msg_show", "search_count", { { 0, " [1/2]  " } }, false, false, false, 0, "search"))
+assert(
+	dispatch("msg_show", "search_count", { { 0, " [1/2]  " } }, false, false, false, 0, "search")
+)
 drain()
 marks = vim.api.nvim_buf_get_extmarks(
 	source_buf,
@@ -415,7 +499,13 @@ assert(#marks == 1 and marks[1][3] == 3)
 assert(dispatch("cmdline_show", { { 0, "command" } }, 4, ":", "", 0, 1))
 drain()
 assert(
-	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
+	#vim.api.nvim_buf_get_extmarks(
+			source_buf,
+			vim.api.nvim_get_namespaces()["cmdline.search_count"],
+			0,
+			-1,
+			{}
+		) == 0
 )
 assert(dispatch("cmdline_hide"))
 drain()
@@ -519,7 +609,9 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 		assert(opts.height == 12)
 	end
 end
-assert(popup_lines and #popup_lines == 12 and popup_lines[1] == "item3" and popup_lines[10] == "item12")
+assert(
+	popup_lines and #popup_lines == 12 and popup_lines[1] == "item3" and popup_lines[10] == "item12"
+)
 assert(dispatch("popupmenu_select", 4))
 drain()
 for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -573,10 +665,20 @@ local error_hl = vim.api.nvim_get_hl_id_by_name("ErrorMsg")
 local received_search_failure = {}
 local original_search_notify = vim.notify
 vim.notify = function(text, level, opts)
-	received_search_failure[#received_search_failure + 1] = { text = text, level = level, opts = opts }
+	received_search_failure[#received_search_failure + 1] =
+		{ text = text, level = level, opts = opts }
 end
 assert(dispatch("msg_show", "search_cmd", { { 0, "/foo" } }, false, false, false) == nil)
-assert(dispatch("msg_show", "emsg", { { 0, "E486: Pattern not found: foo", error_hl } }, false, false, false))
+assert(
+	dispatch(
+		"msg_show",
+		"emsg",
+		{ { 0, "E486: Pattern not found: foo", error_hl } },
+		false,
+		false,
+		false
+	)
+)
 drain()
 assert(#received_search_failure == 1 and received_search_failure[1].text:find("E486", 1, true))
 assert(#vim.api.nvim_list_wins() == baseline)
@@ -597,14 +699,19 @@ assert(dispatch("msg_show", "echo", { { 0, "replacement" } }, true, true, false,
 assert(dispatch("msg_show", "progress", { { 0, "updated first" } }, false, false, false, 7))
 drain()
 assert(#ordinary_messages >= 2)
-assert(vim.inspect(ordinary_messages):find("updated first", 1, true), vim.inspect(ordinary_messages))
+assert(
+	vim.inspect(ordinary_messages):find("updated first", 1, true),
+	vim.inspect(ordinary_messages)
+)
 assert(dispatch("msg_clear"))
 drain()
 assert(#vim.api.nvim_list_wins() == baseline)
 assert(dispatch("msg_show", "shell_err", { { 0, "shell stderr" } }, false, false, false, 14))
 assert(dispatch("msg_show", "shell_out", { { 0, "shell stdout" } }, false, false, false, 15))
 assert(dispatch("msg_show", "shell_ret", { { 0, "shell status" } }, false, false, false, 16))
-assert(dispatch("msg_show", "shell_cmd", { { 0, "shell command" } }, false, false, false, 17) == nil)
+assert(
+	dispatch("msg_show", "shell_cmd", { { 0, "shell command" } }, false, false, false, 17) == nil
+)
 drain()
 assert(#ordinary_messages >= 5)
 assert(ordinary_messages[#ordinary_messages - 2][1] == "shell stderr")
@@ -753,7 +860,17 @@ drain()
 assert(#received == 2 and received[2].text == "second commit" and received[2].id == received[1].id)
 received = {}
 assert(dispatch("msg_show", "progress", { { 0, '"file.lua" ' } }, false, false, false, "bufwrite"))
-assert(dispatch("msg_show", "progress", { { 0, '"file.lua" 89L, 1454B 已写入' } }, true, false, false, "bufwrite"))
+assert(
+	dispatch(
+		"msg_show",
+		"progress",
+		{ { 0, '"file.lua" 89L, 1454B 已写入' } },
+		true,
+		false,
+		false,
+		"bufwrite"
+	)
+)
 drain()
 assert(#received == 1 and received[1].text == '"file.lua" 89L, 1454B 已写入')
 assert(dispatch("msg_show", "progress", { { 0, "updated" } }, false, false, false, "bufwrite"))
@@ -823,7 +940,12 @@ vim.notify = function(text, level, opts)
 end
 assert(dispatch("msg_history_show", {}))
 drain()
-assert(vim.deep_equal(empty_history_notify, { "No messages", vim.log.levels.INFO, { title = "Messages" } }))
+assert(
+	vim.deep_equal(
+		empty_history_notify,
+		{ "No messages", vim.log.levels.INFO, { title = "Messages" } }
+	)
+)
 assert(vim.api.nvim_get_current_win() == previous)
 vim.notify = saved_empty_history_notify
 assert(dispatch("msg_history_show", {
@@ -833,7 +955,12 @@ assert(dispatch("msg_history_show", {
 }))
 drain()
 local history_buf = vim.api.nvim_get_current_buf()
-assert(vim.deep_equal(vim.api.nvim_buf_get_lines(history_buf, 0, -1, false), { "new", "old", "line continued" }))
+assert(
+	vim.deep_equal(
+		vim.api.nvim_buf_get_lines(history_buf, 0, -1, false),
+		{ "new", "old", "line continued" }
+	)
+)
 local keys = vim.api.nvim_buf_get_keymap(history_buf, "n")
 local close
 for _, key in ipairs(keys) do
@@ -848,7 +975,9 @@ assert(not vim.api.nvim_buf_is_valid(history_buf))
 cmdline.setup({ messages = { search_count = { position = "line_end" } } })
 vim.api.nvim_buf_set_lines(source_buf, 0, -1, false, { "foo" })
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
-assert(dispatch("msg_show", "search_count", { { 0, " [1/10]  " } }, false, false, false, 0, "search"))
+assert(
+	dispatch("msg_show", "search_count", { { 0, " [1/10]  " } }, false, false, false, 0, "search")
+)
 drain()
 marks = vim.api.nvim_buf_get_extmarks(
 	source_buf,
@@ -862,17 +991,23 @@ assert(#marks == 1 and marks[1][4].virt_text_pos == "eol")
 vim.cmd.nohlsearch()
 assert(vim.wait(500, function()
 	return #vim.api.nvim_buf_get_extmarks(
+		source_buf,
+		vim.api.nvim_get_namespaces()["cmdline.search_count"],
+		0,
+		-1,
+		{}
+	) == 0
+end))
+require("cmdline.commandline").refresh_search_count()
+drain()
+assert(
+	#vim.api.nvim_buf_get_extmarks(
 			source_buf,
 			vim.api.nvim_get_namespaces()["cmdline.search_count"],
 			0,
 			-1,
 			{}
 		) == 0
-end))
-require("cmdline.commandline").refresh_search_count()
-drain()
-assert(
-	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
 )
 -- A subsequent accepted search can display a new count.
 vim.v.hlsearch = 1
@@ -881,7 +1016,13 @@ assert(dispatch("cmdline_hide", 1, false))
 assert(dispatch("msg_show", "search_count", { { 0, " [1/10]  " } }, false))
 drain()
 assert(
-	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 1
+	#vim.api.nvim_buf_get_extmarks(
+			source_buf,
+			vim.api.nvim_get_namespaces()["cmdline.search_count"],
+			0,
+			-1,
+			{}
+		) == 1
 )
 assert(dispatch("cmdline_show", { { 0, "search" } }, 6, "/", "", 0, 1))
 assert(dispatch("popupmenu_show", { { "one" }, { "two" } }, 0, 0, 0, -1))
@@ -893,7 +1034,13 @@ assert(detach_count == 1 and vim.o.cmdheight == 2)
 assert(not pcall(vim.api.nvim_get_autocmds, { group = "cmdline.nvim" }))
 assert(#vim.api.nvim_list_wins() == baseline and vim.g.ui_cmdline_pos == nil)
 assert(
-	#vim.api.nvim_buf_get_extmarks(source_buf, vim.api.nvim_get_namespaces()["cmdline.search_count"], 0, -1, {}) == 0
+	#vim.api.nvim_buf_get_extmarks(
+			source_buf,
+			vim.api.nvim_get_namespaces()["cmdline.search_count"],
+			0,
+			-1,
+			{}
+		) == 0
 )
 cmdline.setup()
 assert(attach_count == 2)
