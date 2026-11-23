@@ -769,6 +769,28 @@ function M.refresh_search_count()
 end
 
 ---@return nil
+function M.recover()
+	if vim.api.nvim_get_mode().mode ~= "c" then
+		return
+	end
+	if current.active then
+		open_cmdline()
+		redraw_cmdline()
+		return
+	end
+	local text = vim.fn.getcmdline()
+	M.handle(
+		"cmdline_show",
+		{ { 0, text } },
+		math.max(0, vim.fn.getcmdpos() - 1),
+		vim.fn.getcmdtype(),
+		vim.fn.getcmdprompt(),
+		0,
+		1
+	)
+end
+
+---@return nil
 function M.patch_cmp()
 	if cmp_patched then
 		return
@@ -842,7 +864,7 @@ function M.resize()
 		local width, rows = dimensions()
 		local height = vim.api.nvim_win_get_height(win)
 		local col, row = position(width, height, rows)
-		vim.api.nvim_win_set_config(win, { width = width, row = row, col = col })
+		vim.api.nvim_win_set_config(win, { relative = "editor", width = width, row = row, col = col })
 	end
 end
 

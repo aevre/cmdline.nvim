@@ -47,6 +47,26 @@ local function has_title(win, title)
 	return vim.inspect(vim.api.nvim_win_get_config(win).title):find(title, 1, true) ~= nil
 end
 assert(has_title(nested_win, "Command"))
+vim.cmd.tabnew()
+vim.cmd.tabprevious()
+assert(vim.api.nvim_win_is_valid(nested_win))
+assert(vim.api.nvim_win_get_config(nested_win).relative == "editor")
+vim.cmd.tabnext()
+vim.cmd.tabclose()
+vim.api.nvim_win_close(nested_win, true)
+local get_mode = vim.api.nvim_get_mode
+vim.api.nvim_get_mode = function()
+	return { mode = "c", blocking = false }
+end
+require("cmdline.commandline").recover()
+vim.api.nvim_get_mode = get_mode
+nested_win = nil
+for _, win in ipairs(vim.api.nvim_list_wins()) do
+	if vim.api.nvim_win_get_config(win).relative ~= "" then
+		nested_win = win
+	end
+end
+assert(nested_win and has_title(nested_win, "Command"))
 assert(dispatch("cmdline_show", { { 0, "1 + 2" } }, 5, "=", "", 0, 2))
 drain()
 assert(vim.api.nvim_win_is_valid(nested_win))

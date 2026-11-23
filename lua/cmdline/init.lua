@@ -81,7 +81,10 @@ function M.setup(opts)
 	vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
 		group = group,
 		callback = function()
-			vim.schedule(commandline.patch_cmp)
+			vim.schedule(function()
+				commandline.patch_cmp()
+				commandline.recover()
+			end)
 		end,
 	})
 	vim.api.nvim_create_autocmd({ "VimResized", "TabEnter" }, {
