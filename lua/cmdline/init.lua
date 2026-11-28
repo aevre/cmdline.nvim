@@ -87,6 +87,10 @@ function M.setup(opts)
 			end)
 		end,
 	})
+	vim.api.nvim_create_autocmd("CmdwinLeave", {
+		group = group,
+		callback = commandline.teardown,
+	})
 	vim.api.nvim_create_autocmd({ "VimResized", "TabEnter" }, {
 		group = group,
 		callback = commandline.resize,

@@ -17,7 +17,7 @@ cmdline.close_history()
 assert(cmdline.setup() == cmdline)
 cmdline.setup()
 assert(attach_count == 1)
-assert(#vim.api.nvim_get_autocmds({ group = "cmdline.nvim" }) >= 3)
+assert(#vim.api.nvim_get_autocmds({ group = "cmdline.nvim" }) >= 4)
 
 local function drain()
 	local done = false
@@ -43,6 +43,8 @@ for _, win in ipairs(vim.api.nvim_list_wins()) do
 	end
 end
 assert(nested_win)
+local commandline_module = require("cmdline.commandline")
+local get_mode = vim.api.nvim_get_mode
 local function has_title(win, title)
 	return vim.inspect(vim.api.nvim_win_get_config(win).title):find(title, 1, true) ~= nil
 end
@@ -54,11 +56,10 @@ assert(vim.api.nvim_win_get_config(nested_win).relative == "editor")
 vim.cmd.tabnext()
 vim.cmd.tabclose()
 vim.api.nvim_win_close(nested_win, true)
-local get_mode = vim.api.nvim_get_mode
 vim.api.nvim_get_mode = function()
 	return { mode = "c", blocking = false }
 end
-require("cmdline.commandline").recover()
+commandline_module.recover()
 vim.api.nvim_get_mode = get_mode
 nested_win = nil
 for _, win in ipairs(vim.api.nvim_list_wins()) do
